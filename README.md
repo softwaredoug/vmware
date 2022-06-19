@@ -1,7 +1,7 @@
-This folder contains some Elasticsearch configuration and a Dockerfile to expedite setting up Elasticsearch with LTR.
+Experimentation with the Kaggle [vmware zero-shot information retrieval competition](https://www.kaggle.com/competitions/vmware-zero-shot-information-retrieval/overview). Goal is more about practical, easy to implement techniques that most search teams can implement.
 
 ## Docker
-Run `docker-compose up` to create a image running Elasticsearch with LTR
+Run `docker-compose up` to create a image running Elasticsearch 
 
 ## Python Requirements
 
