@@ -1,3 +1,4 @@
+import path  # noqa: F401
 from sys import argv
 from elasticsearch import Elasticsearch
 from math import log
@@ -6,7 +7,7 @@ import pandas as pd
 # Best baseline thusfar
 # from .rerank_simple_slop_search import \
 #    rerank_slop_search_remaining_lines_max_snippet_at_5
-from .compound_search import with_best_compounds_at_5_only_phrase_search
+from vmware.search.compound_search import with_best_compounds_at_5_only_phrase_search
 
 
 def damage(results1, results2, at=10):

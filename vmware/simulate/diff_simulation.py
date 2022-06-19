@@ -115,19 +115,33 @@ def _universe_probability(actual_dcg_delta, simulated_dcg_delta, std_dev=1):
     return universe_prob
 
 
+@Memoize
+def corpus():
+    corpus = pd.read_csv('data/vmware_ir_content.csv')
+    return corpus
+
+
 def _debug_query(diff, query_id):
     """Examine a single query's diff to see what it says about relevance."""
-    corpus = pd.read_csv('data/vmware_ir_content.csv')
     query = diff[diff['QueryId'] == query_id]
-    query = query.merge(corpus, right_on='f_name', left_on='DocumentId', how='left')
+    query = query.merge(corpus(), right_on='f_name', left_on='DocumentId', how='left')
 
+    print("-------- --------")
     for row in query.sort_values('position_before').to_dict('records'):
-        print(row['QueryId'], row['raw_text'][:40], '|',
+        print(row['QueryId'], row['raw_text'][:40].replace("\n", " "), '|',
               row['position_before'], '->', row['position_after'], '|',
               f"{row['weight_delta']:.3f} alpha:{row['alpha']:.2f} beta:{row['beta']:.2f}")
 
 
-def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=0.02, verbose=False,
+def likelihood_not_random(diff, actual_dcg_delta):
+    best_case_dcg_delta = diff.iloc[0]['best_case_dcg_delta']
+
+    # Hacky attempt to estimate the probablity the observed DCG is not random
+    num_grades_changed = len(diff.loc[diff['weight_delta'] != 0])
+    return (num_grades_changed**(actual_dcg_delta / best_case_dcg_delta)) / num_grades_changed
+
+
+def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev=0.02, verbose=False,
                        dcg_diff_std_dev=None):
     """Simulate a single ranking change and account for the actual dcg delta by guessing result relevance.
 
@@ -164,15 +178,14 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
 
     # Hacky attempt to estimate the probablity the observed DCG is not random
     num_grades_changed = len(diff.loc[diff['weight_delta'] != 0])
-    likelihood_not_random = (num_grades_changed**(actual_dcg_delta / best_case_dcg_delta)) / num_grades_changed
-    diff['prob_not_random'] = likelihood_not_random
+    diff['prob_not_random'] = likelihood_not_random(diff, actual_dcg_delta)
 
     if dcg_diff_std_dev is None:
         dcg_diff_std_dev = 0.01 * np.sqrt(diff['QueryId'].nunique())
 
     # likelihood_not_random is 0 -> 0.5
     # likelihood_not_random is 1 -> 0.9
-    prob_positive = (((likelihood_not_random / 2) + 0.5) - 0.01)
+    prob_positive = (((diff['prob_not_random'].iloc[0] / 2) + 0.5) - 0.01)
     best_universe_prob = 0.0
 
     plausible_universe_prob = 0
@@ -202,7 +215,7 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
     biggest_var = 1000
     min_universe_prob = 0
 
-    learning_rate = 0.001
+    learning_rate = 0.0001
     rounds = 0
     while True:
         # Assign the items with a positive weight delta (moved UP) a relevance of 1
@@ -248,14 +261,16 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
             best_universe_prob = universe_prob
 
         if verbose and rounds % 100 == 0:
-            msg = f"Sim: {simulated_dcg_delta:.2f}, Act: {actual_dcg_delta:.2f}({dcg_diff_std_dev:.3f}),"
-            msg += f"Prob: {universe_prob:.3f}, Tot: {plausible_universe_prob:.3f} | Var? {biggest_var:.6f}=>{converge_var:.6f}"
-            msg += f"| Upd {update:.3f}, Draw {prob_positive:.3f}"
+            not_rand = diff['prob_not_random'].iloc[0]
+            msg = f"Sim: {simulated_dcg_delta:.2f}, Act: {actual_dcg_delta:.2f}({dcg_diff_std_dev:.3f}), Best: {best_case_dcg_delta:.3f} | "
+            msg += f"TotUniv: {plausible_universe_prob:.3f} | Var? {biggest_var:.4f}=>{converge_var:.4f}"
+            msg += f"| Upd {update:.4f}, Draw {prob_positive:.4f}, NotRand: {not_rand:.5f}"
             msg += f" | {num_grades_changed} changed | {rounds}/{perf_counter() - start:.3f}s"
             print(msg)
         rounds += 1
 
         if biggest_var <= converge_var and rounds >= min_rounds:
+            diff['prob_positive'] = prob_positive
             break
 
     # alpha - proportion of plausible universes that have this grade as 1
@@ -264,12 +279,15 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
     diff['alpha'] /= plausible_universe_prob
     diff['beta'] /= plausible_universe_prob
     diff['total_universe_prob'] = plausible_universe_prob
+    diff['best_universe_prob'] = best_universe_prob
+    prob_not_random = diff['prob_not_random'] = (prob_positive - 0.5) * 2
+    import pdb; pdb.set_trace()
 
     print(f"BestCase: {best_case_dcg_delta}; Observed: {actual_dcg_delta}")
-    print(f"Likelihood: {likelihood_not_random:.2f} | Total Universe Prob: {plausible_universe_prob:.2f}")
+    print(f"Likelihood: {prob_not_random:.2f} | Total Universe Prob: {plausible_universe_prob:.2f}")
     cols = ['QueryId', 'DocumentId', 'position_before', 'position_after', 'weight_delta', 'alpha', 'beta']
     print(diff[diff['grade_changed']][cols].sort_values('alpha', ascending=False))
 
-    # _debug_query(diff, 0)
-    # _debug_query(diff, 1)
+    _debug_query(diff, 0)
+    _debug_query(diff, 1)
     return diff
