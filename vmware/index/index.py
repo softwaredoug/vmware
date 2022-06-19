@@ -1,5 +1,20 @@
 import elasticsearch.helpers
 import json
+import os
+from time import perf_counter
+from elasticsearch.exceptions import NotFoundError
+
+
+def resp_msg(msg, resp, throw=True):
+    print('{} [Status: {}]'.format(msg, resp.status_code))
+    if resp.status_code >= 400:
+        print(resp.text)
+        if throw:
+            raise RuntimeError(resp.text)
+
+
+version_field = "enrich_version"
+
 
 def enrich(es, index, enrich_fn, mapping, version, workers=2):
     """Incrementally enrich documents not yet at the specified version."""
@@ -63,7 +78,7 @@ class ElasticResp():
             self.text = json.dumps(resp, indent=2)
 
 
-def index_documents(self, index, doc_src):
+def index_documents(es, index, doc_src):
 
     def bulkDocs(doc_src):
         for doc in doc_src:
@@ -75,24 +90,20 @@ def index_documents(self, index, doc_src):
                       "_source": doc}
             yield addCmd
 
-    resp = elasticsearch.helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100, request_timeout=120)
+    elasticsearch.helpers.bulk(es, bulkDocs(doc_src), chunk_size=100, request_timeout=120)
     es.indices.refresh(index=index)
 
 
-def rebuild(es, configs_dir, index, doc_src):
+def rebuild(es, index, doc_src, configs_dir='.'):
     """ Reload a configuration on disk for each search engine
         (Solr a configset, Elasticsearch a json file)
         and reindex
     """
-
-    resp = es.indices.delete(index=index, ignore=[400, 404])
+    es.indices.delete(index=index, ignore=[400, 404])
 
     cfg_json_path = os.path.join(configs_dir, "%s_settings.json" % index)
     with open(cfg_json_path) as src:
         settings = json.load(src)
-        resp = es.indices.create(index, body=settings)
+        es.indices.create(index, body=settings)
 
-
-    client.index_documents(index, doc_src=doc_src)
-
-
+    index_documents(es, index, doc_src=doc_src)
