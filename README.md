@@ -9,6 +9,8 @@ On OSX:
 
 ```
 brew install openblas
+python3 -m venv venv
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
