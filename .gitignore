@@ -1,0 +1,13 @@
+data/
+**/data
+venv/*
+**/.ipynb_checkpoints
+tests/last_run.ipynb
+
+*.pyc
+.vscode
+.cache
+features.txt
+.trash
+.DS_store
+notify.sh
