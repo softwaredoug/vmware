@@ -2,14 +2,16 @@ import pandas as pd
 import numpy as np
 from statistics import NormalDist
 from time import perf_counter
+from vmware.helpers import Memoize
 
 ideal_dcg_at_5 = 2.948459119
 
 
 def add_weights(diff):
     """Add a position. Compute DCG weights"""
-    diff['position'] = diff.groupby('QueryId').cumcount() + 1
-    diff['weight'] = 1 / np.log2(diff['position'] + 1)
+    # Why does this give pandas warning? It is already using loc[]
+    diff.loc[:, 'position'] = diff.groupby('QueryId').cumcount() + 1
+    diff.loc[:, 'weight'] = 1 / np.log2(diff['position'] + 1)
     return diff
 
 
@@ -50,7 +52,6 @@ ideal_dcg_at_5 = 2.948459119
 def create_results_diff(results_before, results_after):
     """Compute the DCG delta weights resulting from the before and after,
        so we can compare to observed mean delta dcg."""
-
     results_before = results_before.groupby('QueryId').head(5)
     results_after = results_after.groupby('QueryId').head(5)
     assert len(results_before) == len(results_after)
@@ -77,7 +78,7 @@ def create_results_diff(results_before, results_after):
     diff.loc[:, 'beta'] = 0.001
     assert (diff[diff['position_delta'] == 0]['weight_delta'] == 0).all()
 
-    diff['grade'] = 0
+    diff.loc[:, 'grade'] = 0
     diff.loc[diff['weight_delta'] > 0, 'grade'] = 1
     diff.loc[diff['weight_delta'] < 0, 'grade'] = 0
     best_case_dcg_delta = sum(diff['grade'] * diff['weight_delta'])
@@ -98,20 +99,25 @@ def _biased_random_sample(sample_size, prob_of_relevance=0.9):
     return biased_sample.astype(int)
 
 
+@Memoize
+def dist_of(dcg_delta, std_dev):
+    return NormalDist(mu=dcg_delta, sigma=std_dev)
+
+
+@Memoize
 def _universe_probability(actual_dcg_delta, simulated_dcg_delta, std_dev=1):
-    if abs(actual_dcg_delta - simulated_dcg_delta) > (3 * std_dev):
-        return 0
-    actual_universe_distribution = NormalDist(mu=actual_dcg_delta, sigma=std_dev)
-    simulated_universe_distribution = NormalDist(mu=simulated_dcg_delta, sigma=std_dev)
+    # if abs(actual_dcg_delta - simulated_dcg_delta) > (10 * std_dev):
+    #    return 0
+    actual_universe_distribution = dist_of(actual_dcg_delta, std_dev)
+    simulated_universe_distribution = dist_of(simulated_dcg_delta, std_dev)
     universe_prob = actual_universe_distribution.overlap(simulated_universe_distribution)
 
     return universe_prob
 
 
-
-
 def _debug_query(diff, query_id):
     """Examine a single query's diff to see what it says about relevance."""
+    corpus = pd.read_csv('data/vmware_ir_content.csv')
     query = diff[diff['QueryId'] == query_id]
     query = query.merge(corpus, right_on='f_name', left_on='DocumentId', how='left')
 
@@ -148,7 +154,6 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
         - alpha: proportion of universes observed to be relevant (grade=1) to account for actual dcg delta
         - beta:  proportion of universes observed to be irrelevant (grade=0) to account for actual dcg delta
         - prob_not_random: probability observed rank changes explains the actual DCG delta
-        - std_dev: std dev of beta distribution represented by alpha and beta
         - total_universe_prob: the total probability density of universes that occured in this simulation
 
 
@@ -193,6 +198,10 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
 
     start = perf_counter()
 
+    converge_var = converge_std_dev**2
+    biggest_var = 1000
+    min_universe_prob = 0
+
     learning_rate = 0.001
     rounds = 0
     while True:
@@ -209,17 +218,22 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
         # DCG delta of this simulated universe - how close is it to the observed DCG delta?
         simulated_dcg_delta = (diff['grade'] * diff['weight_delta']).sum()
         universe_prob = _universe_probability(actual_dcg_delta, simulated_dcg_delta,
-                                              std_dev=dcg_diff_std_dev)
+                                              dcg_diff_std_dev)
 
         # Increment alpha and beta in proportion to probability of the universe being real
         # how close to observed universe relative to how many possible universes could be THE universe (num_grades_changed)
-        diff.loc[(diff['grade'] == 1) & changed, 'alpha'] += universe_prob
-        diff.loc[(diff['grade'] == 0) & changed, 'beta'] += universe_prob
 
-        diff.loc[changed, 'std_dev'] = np.sqrt((diff['alpha'] * diff['beta']) /
-                                               (((diff['alpha'] + diff['beta'])**2) * (1 + diff['alpha'] + diff['beta'])))
+        if universe_prob > min_universe_prob:
+            diff.loc[(diff['grade'] == 1) & changed, 'alpha'] += universe_prob
+            diff.loc[(diff['grade'] == 0) & changed, 'beta'] += universe_prob
 
-        biggest_std_dev = diff.loc[changed, 'std_dev'].max()
+            alpha_times_beta = diff.loc[changed, 'alpha'] * diff.loc[changed, 'beta']
+            alpha_plus_beta = diff.loc[changed, 'alpha'] + diff.loc[changed, 'beta']
+
+            variances = (alpha_times_beta /
+                         ((alpha_plus_beta**2) * (1 + alpha_plus_beta)))
+
+            biggest_var = variances.max()
 
         # increment in the direction of the weight delta
         # inversely proportion to the probability of the universe being real
@@ -235,13 +249,13 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=100, converge_std_dev=
 
         if verbose and rounds % 100 == 0:
             msg = f"Sim: {simulated_dcg_delta:.2f}, Act: {actual_dcg_delta:.2f}({dcg_diff_std_dev:.3f}),"
-            msg += f"Prob: {universe_prob:.3f}, Tot: {plausible_universe_prob:.3f} | StdDev? {biggest_std_dev:.3f}"
+            msg += f"Prob: {universe_prob:.3f}, Tot: {plausible_universe_prob:.3f} | Var? {biggest_var:.6f}=>{converge_var:.6f}"
             msg += f"| Upd {update:.3f}, Draw {prob_positive:.3f}"
             msg += f" | {num_grades_changed} changed | {rounds}/{perf_counter() - start:.3f}s"
             print(msg)
         rounds += 1
 
-        if biggest_std_dev <= converge_std_dev and rounds >= min_rounds:
+        if biggest_var <= converge_var and rounds >= min_rounds:
             break
 
     # alpha - proportion of plausible universes that have this grade as 1

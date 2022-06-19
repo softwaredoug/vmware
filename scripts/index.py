@@ -3,20 +3,21 @@ This script evolves the vmware corpus starting with a reindex,
 and adding non-destructive migrations as I learn more about the corpus,
 and what might work
 """
+import path  # noqa
 from time import perf_counter
 import ast
 
 import pandas as pd
 
-from index import rebuild, enrich
+from vmware.index.index import rebuild, enrich
 
 # enrichment migrations
-import use
-import first_line
-import remaining_lines
-import use_remaining_lines
-import first_remaining_lines
-import three_lines_together
+from vmware.index import use
+from vmware.index import first_line
+from vmware.index import remaining_lines
+from vmware.index import use_remaining_lines
+from vmware.index import first_remaining_lines
+from vmware.index import three_lines_together
 from elasticsearch import Elasticsearch
 
 
@@ -63,32 +64,32 @@ def corpus():
 def main(version):
     es = Elasticsearch()
     if version == 0:
-        rebuild(es, index='vmware2',
+        rebuild(es, index='vmware',
                 doc_src=corpus())
     elif version == 1:
-        enrich(es, index='vmware2',
+        enrich(es, index='vmware',
                enrich_fn=use.enrichment,
                mapping=use.mapping,
                version=version)
     elif version == 2:
-        enrich(es, index='vmware2',
+        enrich(es, index='vmware',
                enrich_fn=first_line.enrichment,
                mapping=first_line.mapping,
                version=version)
     elif version == 3:
-        enrich(es, index='vmware2',
+        enrich(es, index='vmware',
                enrich_fn=remaining_lines.enrichment,
                mapping=remaining_lines.mapping, version=version)
     elif version == 4:
-        enrich(es, index='vmware2',
+        enrich(es, index='vmware',
                enrich_fn=use_remaining_lines.enrichment,
                mapping=use_remaining_lines.mapping, version=version)
     elif version == 5:
-        enrich(es, index='vmware2',
+        enrich(es, index='vmware',
                enrich_fn=first_remaining_lines.enrichment,
                mapping=first_remaining_lines.mapping, version=version)
     elif version == 6:
-        enrich(es, index='vmware2',
+        enrich(es, index='vmware',
                enrich_fn=three_lines_together.enrichment,
                mapping=three_lines_together.mapping, version=version)
 

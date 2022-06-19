@@ -1,7 +1,7 @@
 import pandas as pd
 import math
 import pytest
-from simulate.diff_simulation import create_results_diff, estimate_relevance
+from vmware.simulate.diff_simulation import create_results_diff, estimate_relevance
 
 
 def dcg_weight_at(rank):

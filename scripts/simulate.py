@@ -1,7 +1,8 @@
 # Can we infer relevance grades from just a difference in the mean NDCG of two samples?
+import path  # noqa
 import pandas as pd
 import numpy as np
-from diff_simulation import estimate_relevance, create_results_diff, ideal_dcg_at_5
+from vmware.simulate.diff_simulation import estimate_relevance, create_results_diff, ideal_dcg_at_5
 
 
 # Submissions from the kaggle vmware competition
