@@ -108,3 +108,25 @@ def test_either_swap_accounts_for_dcg_diff(ambiguous_diff):
         "Both 5678 swaps could account for DCG delta, so should be approximately equal"
     assert judgment_1_5678['beta'].iloc[0] == pytest.approx(judgment_2_5678['beta'].iloc[0], 0.1), \
         "Both 5678 swaps could account for DCG delta, so should be approximately equal"
+
+
+def test_ambiguous_diff_is_less_certain(ambiguous_diff):
+    diff, actual_dcg_delta = ambiguous_diff
+    diff = estimate_relevance(diff,
+                              actual_dcg_delta,
+                              verbose=True)
+
+    judgment_1_1234 = diff[(diff['QueryId'] == 1) & (diff['DocumentId'] == "1234")]
+    judgment_1_5678 = diff[(diff['QueryId'] == 1) & (diff['DocumentId'] == "5678")]
+    judgment_2_1234 = diff[(diff['QueryId'] == 2) & (diff['DocumentId'] == "1234")]
+    judgment_2_5678 = diff[(diff['QueryId'] == 2) & (diff['DocumentId'] == "5678")]
+
+    assert judgment_1_5678['alpha'].iloc[0] < 0.8, \
+        "While most simulations should have this as more relevant, it should have many where it is not the one swapped"
+    assert judgment_2_5678['alpha'].iloc[0] < 0.8, \
+        "While most simulations should have this as more relevant, it should have many where it is not the one swapped"
+
+    assert judgment_1_1234['beta'].iloc[0] > 0.2, \
+        "While most simulations should have this as more irrelevant, it should have many where it is not the one swapped"
+    assert judgment_2_1234['beta'].iloc[0] > 0.2, \
+        "While most simulations should have this as more irrelevant, it should have many where it is not the one swapped"
