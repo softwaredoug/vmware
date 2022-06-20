@@ -55,7 +55,8 @@ def ambiguous_diff():
     actual_dcg_delta = dcg_weight_at(1) - dcg_weight_at(2)
     return diff, actual_dcg_delta
 
-def test_best_case_prob_not_random_1(best_case_diff):
+
+def test_best_case_prob_not_random_not_random(best_case_diff):
     diff, actual_dcg_delta = best_case_diff
     diff = estimate_relevance(diff, actual_dcg_delta)
 
@@ -68,7 +69,7 @@ def test_best_case_prob_not_random_1(best_case_diff):
         "Given the diff is best case, prob_not_random should be high"
 
 
-def test_best_case_diff_(best_case_diff):
+def test_best_case_diff_certain(best_case_diff):
     diff, actual_dcg_delta = best_case_diff
     diff = estimate_relevance(diff, actual_dcg_delta)
 

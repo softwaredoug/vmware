@@ -39,8 +39,8 @@ def significant_diffs(results):
 
 
 def grade_judgments(judgments):
-    judgments['alpha'] *= judgments['dcg_delta_per_changed']
-    judgments['beta'] *= judgments['dcg_delta_per_changed']
+    # judgments['alpha'] *= judgments['dcg_delta_per_changed']
+    # judgments['beta'] *= judgments['dcg_delta_per_changed']
     judgments = \
         judgments.groupby(['QueryId', 'DocumentId'])[['alpha', 'beta']].sum()
     judgments['grade'] = judgments['alpha'] / (judgments['alpha'] + judgments['beta'])
@@ -81,11 +81,4 @@ def run_diffs(results):
 
     judgments = pd.concat(all_diffs)
     judgments.to_pickle('data/judgments.pkl')
-    judgments['alpha'] *= results['dcg_delta_per_changed']
-    judgments['beta'] *= judgments['dcg_delta_per_changed']
-    judgments = \
-        judgments.groupby(['QueryId', 'DocumentId'])[['alpha', 'beta']].sum()
-    judgments['grade'] = judgments['alpha'] / (judgments['alpha'] + judgments['beta'])
-    judgments['grade_std_dev'] = np.sqrt((judgments['alpha'] * judgments['beta']) /
-                                         (((judgments['alpha'] + judgments['beta'])**2) * (1 + judgments['alpha'] + judgments['beta'])))
     return judgments
