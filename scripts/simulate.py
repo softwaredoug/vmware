@@ -1,7 +1,7 @@
 # Can we infer relevance grades from just a difference in the mean NDCG of two samples?
 import path  # noqa
 import pandas as pd
-from vmware.simulate.multiple import estimate_relevance, significant_diffs
+from vmware.simulate.multiple import run_diffs, significant_diffs, grade_judgments
 
 
 # Submissions from the kaggle vmware competition
@@ -30,9 +30,9 @@ def main():
                                       'weight_delta', 'position_delta'])
     runs = [(run[0], pd.read_csv(run[0]), run[1]) for run in ndcgs.items()]
 
-    # all_diffs = significant_diffs(runs)
-    # import pdb; pdb.set_trace()
-    judgments = estimate_relevance(runs)
+    runs = significant_diffs(runs)
+    judgments = run_diffs(runs)
+    judgments = grade_judgments(judgments)
 
     # Join with corpus for debugging
     corpus = pd.read_csv('data/vmware_ir_content.csv')

@@ -25,6 +25,36 @@ def best_case_diff():
     return diff, actual_dcg_delta
 
 
+@pytest.fixture
+def ambiguous_diff():
+    results_before = pd.DataFrame([
+        {'QueryId': 1, 'DocumentId': "1234"},
+        {'QueryId': 1, 'DocumentId': "5678"},
+        {'QueryId': 2, 'DocumentId': "1234"},
+        {'QueryId': 2, 'DocumentId': "5678"}
+    ])
+
+    both_queries_swapped = pd.DataFrame([
+        {'QueryId': 1, 'DocumentId': "5678"},
+        {'QueryId': 1, 'DocumentId': "1234"},
+        {'QueryId': 2, 'DocumentId': "5678"},
+        {'QueryId': 2, 'DocumentId': "1234"}
+    ])
+
+    # Plausible scenarios explain this DCG change
+    # Three relevant docs:
+    # doc 1234 and doc 5678 are both relevant for query 1, but only 5678 is relevant for query 2
+    # doc 1234 and doc 5678 are both relevant for query 2, but only 5678 is relevant for query 1
+    # One relevant doc:
+    # doc 1234 and doc 5678 are NOT relevant for query 1, but only 5678 is relevant for query 2
+    # doc 1234 and doc 5678 are NOT relevant for query 2, but only 5678 is relevant for query 1
+    #
+    # To capture all of these, many simulations (total_universe_prob) need to be run to see this
+    #
+    diff = create_results_diff(results_before, both_queries_swapped)
+    actual_dcg_delta = dcg_weight_at(1) - dcg_weight_at(2)
+    return diff, actual_dcg_delta
+
 def test_best_case_prob_not_random_1(best_case_diff):
     diff, actual_dcg_delta = best_case_diff
     diff = estimate_relevance(diff, actual_dcg_delta)
@@ -54,33 +84,8 @@ def test_best_case_diff_(best_case_diff):
         "Given the diff is best case, beta diff should be very high"
 
 
-def test_either_swap_accounts_for_dcg_diff():
-    results_before = pd.DataFrame([
-        {'QueryId': 1, 'DocumentId': "1234"},
-        {'QueryId': 1, 'DocumentId': "5678"},
-        {'QueryId': 2, 'DocumentId': "1234"},
-        {'QueryId': 2, 'DocumentId': "5678"}
-    ])
-
-    both_queries_swapped = pd.DataFrame([
-        {'QueryId': 1, 'DocumentId': "5678"},
-        {'QueryId': 1, 'DocumentId': "1234"},
-        {'QueryId': 2, 'DocumentId': "5678"},
-        {'QueryId': 2, 'DocumentId': "1234"}
-    ])
-
-    # Plausible scenarios explain this DCG change
-    # Three relevant docs:
-    # doc 1234 and doc 5678 are both relevant for query 1, but only 5678 is relevant for query 2
-    # doc 1234 and doc 5678 are both relevant for query 2, but only 5678 is relevant for query 1
-    # One relevant doc:
-    # doc 1234 and doc 5678 are NOT relevant for query 1, but only 5678 is relevant for query 2
-    # doc 1234 and doc 5678 are NOT relevant for query 2, but only 5678 is relevant for query 1
-    #
-    # To capture all of these, many simulations (total_universe_prob) need to be run to see this
-    #
-    diff = create_results_diff(results_before, both_queries_swapped)
-    actual_dcg_delta = dcg_weight_at(1) - dcg_weight_at(2)
+def test_either_swap_accounts_for_dcg_diff(ambiguous_diff):
+    diff, actual_dcg_delta = ambiguous_diff
     diff = estimate_relevance(diff,
                               actual_dcg_delta,
                               verbose=True)

@@ -84,6 +84,8 @@ def create_results_diff(results_before, results_after):
     best_case_dcg_delta = sum(diff['grade'] * diff['weight_delta'])
 
     diff['best_case_dcg_delta'] = best_case_dcg_delta
+    num_grades_changed = len(diff.loc[diff['weight_delta'] != 0])
+    diff['num_changed'] = num_grades_changed
 
     return diff
 
@@ -157,22 +159,28 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
     relevance grades. The alphas and betas keep incrementing untilthe std dev falls below the converge_std_dev threshold.
     That is, they're not really changing much more relative to each other.
 
-    Then the alpha/beta are scaled back to the total_universe_prob.
+    Then the alpha/beta are scaled back to the plausible_universes.
 
     Combining this diff with other diffs is left as an exercise for the caller. Simply summing can underweight very certain scenarios,
-    relative to much more uncertain ones. So you may wish to consider `prob_not_random` and `total_universe_prob` to adjust
+    relative to much more uncertain ones. So you may wish to consider `prob_not_random` and `plausible_universes` to adjust
     alpha/beta before combining with other diffs.
 
     Returns modified diff dataframe adding columns:
 
         - alpha: proportion of universes observed to be relevant (grade=1) to account for actual dcg delta
         - beta:  proportion of universes observed to be irrelevant (grade=0) to account for actual dcg delta
-        - prob_not_random: probability observed rank changes explains the actual DCG delta
-        - total_universe_prob: the total probability density of universes that occured in this simulation
+        - prob_not_random: probability a randomly chosen position that was moved up or down is relevant
+          - this is kind of a uniform distribution over the changed relevance, and can be thought of as
+            kind of a context-indepentent prior (here context would be the DCG weight of the position changed)
+        - plausible_universes: the total probability density of universes that occured in this simulation
+          before alpha and beta converged.
+
+          The more universes that occured, the more simulations were required, and less certain the predictions are.
 
 
     """
-    num_grades_changed = len(diff.loc[diff['weight_delta'] != 0])
+    num_grades_changed = diff['num_changed'].iloc[0]
+    diff['dcg_delta_per_changed'] = actual_dcg_delta / num_grades_changed
 
     best_case_dcg_delta = diff.iloc[0]['best_case_dcg_delta']
 
@@ -275,19 +283,18 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
 
     # alpha - proportion of plausible universes that have this grade as 1
     # beta - proportion of plausible universes that have this grade as 0
-    # total_universe_prob - accumulated probability density of all explored universes
+    # plausible_universes - accumulated probability density of all explored universes
     diff['alpha'] /= plausible_universe_prob
     diff['beta'] /= plausible_universe_prob
-    diff['total_universe_prob'] = plausible_universe_prob
+    diff['plausible_universes'] = plausible_universe_prob
     diff['best_universe_prob'] = best_universe_prob
     prob_not_random = diff['prob_not_random'] = (prob_positive - 0.5) * 2
-    import pdb; pdb.set_trace()
 
     print(f"BestCase: {best_case_dcg_delta}; Observed: {actual_dcg_delta}")
     print(f"Likelihood: {prob_not_random:.2f} | Total Universe Prob: {plausible_universe_prob:.2f}")
     cols = ['QueryId', 'DocumentId', 'position_before', 'position_after', 'weight_delta', 'alpha', 'beta']
     print(diff[diff['grade_changed']][cols].sort_values('alpha', ascending=False))
 
-    _debug_query(diff, 0)
-    _debug_query(diff, 1)
+    # _debug_query(diff, 0)
+    # _debug_query(diff, 1)
     return diff
