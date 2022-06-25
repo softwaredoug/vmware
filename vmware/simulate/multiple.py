@@ -82,3 +82,12 @@ def run_diffs(results):
     judgments = pd.concat(all_diffs)
     judgments.to_pickle('data/judgments.pkl')
     return judgments
+
+
+def to_submission(results, name):
+    from time import time
+    timestamp = str(time()).replace('.', '')
+    fname = f'data/simulated_{name}_turnbull_{timestamp}.csv'
+    results = results.sort_values(['QueryId', 'grade'], ascending=[True, False]).groupby('QueryId').head(5)
+    print("Writing To: ", fname)
+    results[['QueryId', 'DocumentId']].to_csv(fname, index=False)
