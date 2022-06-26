@@ -52,21 +52,28 @@ ideal_dcg_at_5 = 2.948459119
 def create_results_diff(results_before, results_after):
     """Compute the DCG delta weights resulting from the before and after,
        so we can compare to observed mean delta dcg."""
-    results_before = results_before.groupby('QueryId').head(5)
     results_after = results_after.groupby('QueryId').head(5)
-    assert len(results_before) == len(results_after)
-
-    results_before = add_weights(results_before)
     results_after = add_weights(results_after)
-    diff = results_before.merge(results_after,
-                                on=['QueryId', 'DocumentId'],
-                                how='outer')
-    diff = diff.rename(
-        columns={'position_x': 'position_before',
-                 'position_y': 'position_after',
-                 'weight_x': 'weight_before',
-                 'weight_y': 'weight_after'}
-    )
+
+    if results_before is not None:
+        results_before = results_before.groupby('QueryId').head(5)
+        assert len(results_before) == len(results_after)
+        results_before = add_weights(results_before)
+        diff = results_before.merge(results_after,
+                                    on=['QueryId', 'DocumentId'],
+                                    how='outer')
+        diff = diff.rename(
+            columns={'position_x': 'position_before',
+                     'position_y': 'position_after',
+                     'weight_x': 'weight_before',
+                     'weight_y': 'weight_after'}
+        )
+    else:
+        diff = results_after
+        diff['position_after'] = diff['position']
+        diff['position_before'] = 0
+        diff['weight_after'] = diff['weight']
+        diff['weight_before'] = 0
     # For each document, its DCG weight before and aftter
     # REVIEW FOR BUG
     diff['weight_after'] = diff['weight_after'].replace(np.nan, 0)

@@ -9,6 +9,16 @@ def dcg_weight_at(rank):
 
 
 @pytest.fixture
+def single_result():
+    results = pd.DataFrame([
+        {'QueryId': 1, 'DocumentId': "1234"},  # Not relevant
+        {'QueryId': 1, 'DocumentId': "5678"}   # Relevant (grade=1)
+    ])
+    dcg = dcg_weight_at(2)
+    return results, dcg
+
+
+@pytest.fixture
 def best_case_diff():
     results_before = pd.DataFrame([
         {'QueryId': 1, 'DocumentId': "1234"},  # relevance = 0 * 1
@@ -131,3 +141,22 @@ def test_ambiguous_diff_is_less_certain(ambiguous_diff):
         "While most simulations should have this as more irrelevant, it should have many where it is not the one swapped"
     assert judgment_2_1234['beta'].iloc[0] > 0.2, \
         "While most simulations should have this as more irrelevant, it should have many where it is not the one swapped"
+
+
+def test_can_create_fake_diff_from_result_in_isolation(single_result):
+    results, dcg = single_result
+    diff = create_results_diff(results_before=None, results_after=results)
+    assert diff['weight_delta'].iloc[0] == pytest.approx(1.0)
+    assert diff['weight_delta'].iloc[1] == pytest.approx(0.63093)
+
+
+def test_can_reconstruct_label_from_result_in_isolation(single_result):
+    results, dcg = single_result
+    diff = create_results_diff(results_before=None, results_after=results)
+    diff = estimate_relevance(diff,
+                              dcg,
+                              verbose=True)
+    diff[diff['DocumentId'] == 5678]['alpha'] = pytest.approx(1.0, 0.01)
+    diff[diff['DocumentId'] == 5678]['beta'] = pytest.approx(0.0, 0.01)
+    diff[diff['DocumentId'] == 1234]['alpha'] = pytest.approx(0.0, 0.01)
+    diff[diff['DocumentId'] == 1234]['beta'] = pytest.approx(1.0, 0.01)
