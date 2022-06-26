@@ -74,15 +74,14 @@ def create_results_diff(results_before, results_after):
         diff['position_before'] = 0
         diff['weight_after'] = diff['weight']
         diff['weight_before'] = 0
-    # For each document, its DCG weight before and aftter
-    # REVIEW FOR BUG
+
     diff['weight_after'] = diff['weight_after'].replace(np.nan, 0)
     diff['weight_before'] = diff['weight_before'].replace(np.nan, 0)
     diff['weight_delta'] = diff['weight_after'] - diff['weight_before']
     diff['position_delta'] = diff['position_after'] - diff['position_before']
     diff['weight_delta_abs'] = np.abs(diff['weight_delta'])
-    diff.loc[:, 'alpha'] = 0.001
-    diff.loc[:, 'beta'] = 0.001
+    diff.loc[:, 'rels'] = 0.001
+    diff.loc[:, 'not_rels'] = 0.001
     assert (diff[diff['position_delta'] == 0]['weight_delta'] == 0).all()
 
     diff.loc[:, 'grade'] = 0
@@ -139,7 +138,7 @@ def _debug_query(diff, query_id):
     for row in query.sort_values('position_before').to_dict('records'):
         print(row['QueryId'], row['raw_text'][:40].replace("\n", " "), '|',
               row['position_before'], '->', row['position_after'], '|',
-              f"{row['weight_delta']:.3f} alpha:{row['alpha']:.2f} beta:{row['beta']:.2f}")
+              f"{row['weight_delta']:.3f} rels:{row['rels']:.2f} not_rels:{row['not_rels']:.2f}")
 
 
 def likelihood_not_random(diff, actual_dcg_delta):
@@ -155,25 +154,25 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
     """Simulate a single ranking diff and account for the actual dcg delta by guessing result relevance.
 
     For each oserved query/doc ranking change:
-    - alpha counts plausible simulations where query/doc grade=1 (relevant),
-    - beta when its grade=0 (not relevant).
+    - 'rels' counts plausible simulations where query/doc grade=1 (relevant),
+    - 'not_rels' when its grade=0 (not relevant).
 
-    Essentially each alpha / beta are counting a bernouli process (coin flip), and represent a binomial distribution
+    Essentially each 'rels' / 'not_rels' are counting a bernouli process (coin flip), and represent a binomial distribution
     https://en.wikipedia.org/wiki/Binomial_distribution
 
     Combining this binomial distribution with other diffs is left as an exercise for the caller. Simply summing can underweight very certain scenarios,
     relative to much more uncertain ones. So you may wish to consider `prob_not_random` and `plausible_universes` to adjust
-    alpha/beta before combining with other diffs.
+    rels/not_rels before combining with other diffs.
 
     Returns modified diff dataframe adding columns:
 
-        - alpha: proportion of universes observed to be relevant (grade=1) to account for actual dcg delta
-        - beta:  proportion of universes observed to be irrelevant (grade=0) to account for actual dcg delta
+        - rels: proportion of universes observed to be relevant (grade=1) to account for actual dcg delta
+        - not_rels:  proportion of universes observed to be irrelevant (grade=0) to account for actual dcg delta
         - prob_not_random: probability a randomly chosen position that was moved up or down is relevant
           - this is kind of a uniform distribution over the changed relevance, and can be thought of as
             kind of a context-indepentent prior (here context would be the DCG weight of the position changed)
         - plausible_universes: the total probability density of universes that occured in this simulation
-          before alpha and beta converged.
+          before rels and not_rels converged.
 
           The more universes that occured, the more simulations were required, and less certain the predictions are.
 
@@ -199,13 +198,13 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
     plausible_universe_prob = 0
 
     # If the probability of observing actual DCG at random is pretty high
-    # then we shouldn't increment alpha and beta too much
-    # otherwise alpha and beta become too certain around
+    # then we shouldn't increment rels and not_rels too much
+    # otherwise rels and not_rels become too certain around
     #
     # OTOH if the probability is very unlikely, the actual DCG delta
     # is very important to account for
     #
-    # We can account for this when we normalize alpha and beta
+    # We can account for this when we normalize rels and not_rels
     diff['grade_changed'] = False
     diff['actual_dcg_delta'] = actual_dcg_delta
     moves_up = diff['weight_delta'] > 0
@@ -241,18 +240,24 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
         universe_prob = _universe_probability(actual_dcg_delta, simulated_dcg_delta,
                                               dcg_diff_std_dev)
 
-        # Increment alpha and beta in proportion to probability of the universe being real
+        # Increment rels and not_rels in proportion to probability of the universe being real
         # how close to observed universe relative to how many possible universes could be THE universe (num_grades_changed)
 
         if universe_prob > min_universe_prob:
-            diff.loc[(diff['grade'] == 1) & changed, 'alpha'] += universe_prob
-            diff.loc[(diff['grade'] == 0) & changed, 'beta'] += universe_prob
+            diff.loc[(diff['grade'] == 1) & changed, 'rels'] += universe_prob
+            diff.loc[(diff['grade'] == 0) & changed, 'not_rels'] += universe_prob
 
-            alpha_times_beta = diff.loc[changed, 'alpha'] * diff.loc[changed, 'beta']
-            alpha_plus_beta = diff.loc[changed, 'alpha'] + diff.loc[changed, 'beta']
+            # If rels / not_rels were alpha / beta in beta distribution params
+            rels_times_not_rels = diff.loc[changed, 'rels'] * diff.loc[changed, 'not_rels']
+            rels_plus_not_rels = diff.loc[changed, 'rels'] + diff.loc[changed, 'not_rels']
 
-            variances = (alpha_times_beta /
-                         ((alpha_plus_beta**2) * (1 + alpha_plus_beta)))
+            variances = (rels_times_not_rels /
+                         ((rels_plus_not_rels**2) * (1 + rels_plus_not_rels)))
+
+            # As binomial distribution (the multiplication of n - number of trials - is
+            # already in the accumulating values
+            # However, this never converges, and only ever increases with more trials
+            # variances = rels_times_not_rels
 
             biggest_var = variances.max()
 
@@ -281,19 +286,19 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
             diff['prob_positive'] = prob_positive
             break
 
-    # alpha - proportion of plausible universes that have this grade as 1
-    # beta - proportion of plausible universes that have this grade as 0
+    # rels - proportion of plausible universes that have this grade as 1
+    # not_rels - proportion of plausible universes that have this grade as 0
     # plausible_universes - accumulated probability density of all explored universes
-    diff['alpha'] /= plausible_universe_prob
-    diff['beta'] /= plausible_universe_prob
+    diff['rels'] /= plausible_universe_prob
+    diff['not_rels'] /= plausible_universe_prob
     diff['plausible_universes'] = plausible_universe_prob
     diff['best_universe_prob'] = best_universe_prob
     prob_not_random = diff['prob_not_random'] = (prob_positive - 0.5) * 2
 
     print(f"BestCase: {best_case_dcg_delta}; Observed: {actual_dcg_delta}")
     print(f"Likelihood: {prob_not_random:.2f} | Total Universe Prob: {plausible_universe_prob:.2f}")
-    cols = ['QueryId', 'DocumentId', 'position_before', 'position_after', 'weight_delta', 'alpha', 'beta']
-    print(diff[diff['grade_changed']][cols].sort_values('alpha', ascending=False))
+    cols = ['QueryId', 'DocumentId', 'position_before', 'position_after', 'weight_delta', 'rels', 'not_rels']
+    print(diff[diff['grade_changed']][cols].sort_values('rels', ascending=False))
 
     # _debug_query(diff, 0)
     # _debug_query(diff, 1)

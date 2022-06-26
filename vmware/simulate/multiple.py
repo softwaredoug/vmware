@@ -47,23 +47,23 @@ def significant_diffs(results):
 
 
 def information_amount(all_diffs, midpoint=0.6, skew=1000000):
-    """Scale the alpha and beta to the available information. Diff close to 1 perfect info. Close to 0, very
+    """Scale the rels and not_rels to the available information. Diff close to 1 perfect info. Close to 0, very
        very imperfect info."""
     # See graph here https://www.desmos.com/calculator/0wah7odcqh
-    deltas = np.abs(all_diffs['alpha'] - all_diffs['beta'])
+    deltas = np.abs(all_diffs['rels'] - all_diffs['not_rels'])
     return skew ** (deltas - midpoint)
 
 
 def grade_judgments(all_diffs):
     all_diffs['weight'] = information_amount(all_diffs)
 
-    all_diffs['alpha'] *= all_diffs['weight']
-    all_diffs['beta'] *= all_diffs['weight']
+    all_diffs['rels'] *= all_diffs['weight']
+    all_diffs['not_rels'] *= all_diffs['weight']
     judgments = \
-        all_diffs.groupby(['QueryId', 'DocumentId'])[['alpha', 'beta']].sum()
-    judgments['grade'] = judgments['alpha'] / (judgments['alpha'] + judgments['beta'])
-    judgments['grade_std_dev'] = np.sqrt((judgments['alpha'] * judgments['beta']) /
-                                         (((judgments['alpha'] + judgments['beta'])**2) * (1 + judgments['alpha'] + judgments['beta'])))
+        all_diffs.groupby(['QueryId', 'DocumentId'])[['rels', 'not_rels']].sum()
+    judgments['grade'] = judgments['rels'] / (judgments['rels'] + judgments['not_rels'])
+    judgments['grade_std_dev'] = np.sqrt((judgments['rels'] * judgments['not_rels']) /
+                                         (((judgments['rels'] + judgments['not_rels'])**2) * (1 + judgments['rels'] + judgments['not_rels'])))
     return judgments
 
 
@@ -110,7 +110,7 @@ def diff_worker(result_before, result_after):
 
     # Any changed results should have participated in the simulation, ignore others
     results = results[results['weight_delta'] != 0.0]
-    assert (results['alpha'] + results['beta'] > 0.95).all()
+    assert (results['rels'] + results['not_rels'] > 0.95).all()
     return results
 
 

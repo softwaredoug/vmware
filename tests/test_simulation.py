@@ -86,13 +86,13 @@ def test_best_case_diff_certain(best_case_diff):
     judgment_1234 = diff[(diff['QueryId'] == 1) & (diff['DocumentId'] == "1234")]
     judgment_5678 = diff[(diff['QueryId'] == 1) & (diff['DocumentId'] == "5678")]
 
-    assert judgment_5678['alpha'].iloc[0] > judgment_1234['alpha'].iloc[0]
-    assert judgment_5678['beta'].iloc[0] < judgment_1234['beta'].iloc[0]
+    assert judgment_5678['rels'].iloc[0] > judgment_1234['rels'].iloc[0]
+    assert judgment_5678['not_rels'].iloc[0] < judgment_1234['not_rels'].iloc[0]
     # They should be VERY different
-    assert judgment_5678['alpha'].iloc[0] - judgment_1234['alpha'].iloc[0] > 0.9, \
-        "Given the diff is best case, alpha diff should be very high"
-    assert judgment_1234['beta'].iloc[0] - judgment_5678['beta'].iloc[0] > 0.9, \
-        "Given the diff is best case, beta diff should be very high"
+    assert judgment_5678['rels'].iloc[0] - judgment_1234['rels'].iloc[0] > 0.9, \
+        "Given the diff is best case, rels diff should be very high"
+    assert judgment_1234['not_rels'].iloc[0] - judgment_5678['not_rels'].iloc[0] > 0.9, \
+        "Given the diff is best case, not_rels diff should be very high"
 
 
 def test_either_swap_accounts_for_dcg_diff(ambiguous_diff):
@@ -106,18 +106,18 @@ def test_either_swap_accounts_for_dcg_diff(ambiguous_diff):
     judgment_2_1234 = diff[(diff['QueryId'] == 2) & (diff['DocumentId'] == "1234")]
     judgment_2_5678 = diff[(diff['QueryId'] == 2) & (diff['DocumentId'] == "5678")]
 
-    assert judgment_1_5678['alpha'].iloc[0] > judgment_1_5678['beta'].iloc[0] + 0.1, \
+    assert judgment_1_5678['rels'].iloc[0] > judgment_1_5678['not_rels'].iloc[0] + 0.1, \
         "Swapping either query results in the DCG diff, so 5678s should be more relevant"
-    assert judgment_1_1234['beta'].iloc[0] > judgment_1_1234['alpha'].iloc[0] + 0.1, \
+    assert judgment_1_1234['not_rels'].iloc[0] > judgment_1_1234['rels'].iloc[0] + 0.1, \
         "Swapping either query results in the DCG diff, so 5678s should be more relevant"
-    assert judgment_2_5678['alpha'].iloc[0] > judgment_2_5678['beta'].iloc[0] + 0.1, \
+    assert judgment_2_5678['rels'].iloc[0] > judgment_2_5678['not_rels'].iloc[0] + 0.1, \
         "Swapping either query results in the DCG diff, so 5678s should be more relevant"
-    assert judgment_2_1234['beta'].iloc[0] > judgment_2_1234['alpha'].iloc[0] + 0.1, \
+    assert judgment_2_1234['not_rels'].iloc[0] > judgment_2_1234['rels'].iloc[0] + 0.1, \
         "Swapping either query results in the DCG diff, so 5678s should be more relevant"
 
-    assert judgment_1_5678['alpha'].iloc[0] == pytest.approx(judgment_2_5678['alpha'].iloc[0], 0.1), \
+    assert judgment_1_5678['rels'].iloc[0] == pytest.approx(judgment_2_5678['rels'].iloc[0], 0.1), \
         "Both 5678 swaps could account for DCG delta, so should be approximately equal"
-    assert judgment_1_5678['beta'].iloc[0] == pytest.approx(judgment_2_5678['beta'].iloc[0], 0.1), \
+    assert judgment_1_5678['not_rels'].iloc[0] == pytest.approx(judgment_2_5678['not_rels'].iloc[0], 0.1), \
         "Both 5678 swaps could account for DCG delta, so should be approximately equal"
 
 
@@ -132,14 +132,14 @@ def test_ambiguous_diff_is_less_certain(ambiguous_diff):
     judgment_2_1234 = diff[(diff['QueryId'] == 2) & (diff['DocumentId'] == "1234")]
     judgment_2_5678 = diff[(diff['QueryId'] == 2) & (diff['DocumentId'] == "5678")]
 
-    assert judgment_1_5678['alpha'].iloc[0] < 0.8, \
+    assert judgment_1_5678['rels'].iloc[0] < 0.8, \
         "While most simulations should have this as more relevant, it should have many where it is not the one swapped"
-    assert judgment_2_5678['alpha'].iloc[0] < 0.8, \
+    assert judgment_2_5678['rels'].iloc[0] < 0.8, \
         "While most simulations should have this as more relevant, it should have many where it is not the one swapped"
 
-    assert judgment_1_1234['beta'].iloc[0] > 0.2, \
+    assert judgment_1_1234['not_rels'].iloc[0] > 0.2, \
         "While most simulations should have this as more irrelevant, it should have many where it is not the one swapped"
-    assert judgment_2_1234['beta'].iloc[0] > 0.2, \
+    assert judgment_2_1234['not_rels'].iloc[0] > 0.2, \
         "While most simulations should have this as more irrelevant, it should have many where it is not the one swapped"
 
 
@@ -156,7 +156,7 @@ def test_can_reconstruct_label_from_result_in_isolation(single_result):
     diff = estimate_relevance(diff,
                               dcg,
                               verbose=True)
-    diff[diff['DocumentId'] == 5678]['alpha'] = pytest.approx(1.0, 0.01)
-    diff[diff['DocumentId'] == 5678]['beta'] = pytest.approx(0.0, 0.01)
-    diff[diff['DocumentId'] == 1234]['alpha'] = pytest.approx(0.0, 0.01)
-    diff[diff['DocumentId'] == 1234]['beta'] = pytest.approx(1.0, 0.01)
+    diff[diff['DocumentId'] == 5678]['rels'] = pytest.approx(1.0, 0.01)
+    diff[diff['DocumentId'] == 5678]['not_rels'] = pytest.approx(0.0, 0.01)
+    diff[diff['DocumentId'] == 1234]['rels'] = pytest.approx(0.0, 0.01)
+    diff[diff['DocumentId'] == 1234]['not_rels'] = pytest.approx(1.0, 0.01)
