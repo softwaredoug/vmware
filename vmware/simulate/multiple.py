@@ -5,6 +5,8 @@ from time import time
 import os.path
 from vmware.simulate.diff_simulation import estimate_relevance, ideal_dcg_at_5, create_results_diff, likelihood_not_random
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 
 def significant_diffs(results):
     diffs = []
@@ -44,7 +46,7 @@ def significant_diffs(results):
     return results_by_significance
 
 
-def information_amount(all_diffs, midpoint=0.75, skew=1000):
+def information_amount(all_diffs, midpoint=0.6, skew=1000000):
     """Scale the alpha and beta to the available information. Diff close to 1 perfect info. Close to 0, very
        very imperfect info."""
     # See graph here https://www.desmos.com/calculator/0wah7odcqh
@@ -75,50 +77,65 @@ def debugable_results(judgments):
     return results
 
 
+def diff_worker(result_before, result_after):
+    name_before, results_before, ndcg_before = result_before
+    name_after, results_after, ndcg_after = result_after
+
+    mean_ndcg_diff = ndcg_after - ndcg_before
+
+    if mean_ndcg_diff <= 0:
+        return
+
+    if name_before is not None:
+        cache_file = f"data/cache/{os.path.basename(name_before)}_{os.path.basename(name_after)}.pkl"
+    else:
+        cache_file = f"data/cache/{None}_{os.path.basename(name_after)}.pkl"
+
+    try:
+        results = pd.read_pickle(cache_file)
+        print(f"Reusing Cache {cache_file}")
+    except FileNotFoundError:
+        results_diff = create_results_diff(results_before, results_after)
+        results_diff['name_before'] = name_before
+        results_diff['name_after'] = name_after
+
+        # Translate our NDCG@5 to a sum of all DCG@5 to simplify the simulation
+        actual_dcg_delta = len(results_diff['QueryId'].unique()) * mean_ndcg_diff * ideal_dcg_at_5
+
+        results = estimate_relevance(results_diff,
+                                     actual_dcg_delta=actual_dcg_delta,
+                                     verbose=True)
+        results.to_pickle(cache_file)
+    assert (results[results['position_delta'] == 0]['weight_delta'] == 0).all()
+
+    # Any changed results should have participated in the simulation, ignore others
+    results = results[results['weight_delta'] != 0.0]
+    assert (results['alpha'] + results['beta'] > 0.95).all()
+    return results
+
+
 def run_diffs(results):
     all_diffs = []
 
-    for result_before, result_after in zip(results, results[1:]):
-        name_before, results_before, ndcg_before = result_before
-        name_after, results_after, ndcg_after = result_after
+    futures = []
 
-        mean_ndcg_diff = ndcg_after - ndcg_before
+    with ProcessPoolExecutor(max_workers=8) as executor:
 
-        if mean_ndcg_diff <= 0:
-            continue
+        for result_before, result_after in zip(results, results[1:]):
+            name_before, results_before, ndcg_before = result_before
+            name_after, results_after, ndcg_after = result_after
 
-        if name_before is not None:
-            cache_file = f"data/cache/{os.path.basename(name_before)}_{os.path.basename(name_after)}.pkl"
-        else:
-            cache_file = f"data/cache/{None}_{os.path.basename(name_after)}.pkl"
+            mean_ndcg_diff = ndcg_after - ndcg_before
+            if mean_ndcg_diff > 0.0:
+                future = executor.submit(diff_worker, result_before, result_after)
+                futures.append(future)
 
-        try:
-            results = pd.read_pickle(cache_file)
-            print(f"Reusing Cache {cache_file}")
-        except FileNotFoundError:
-            results_diff = create_results_diff(results_before, results_after)
-            results_diff['name_before'] = name_before
-            results_diff['name_after'] = name_after
-
-            # Translate our NDCG@5 to a sum of all DCG@5 to simplify the simulation
-            actual_dcg_delta = len(results_diff['QueryId'].unique()) * mean_ndcg_diff * ideal_dcg_at_5
-
-            results = estimate_relevance(results_diff,
-                                         actual_dcg_delta=actual_dcg_delta,
-                                         verbose=True)
-            results.to_pickle(cache_file)
-
-        # Accumulate judgments from this pair into the evaluation
-        assert (results[results['position_delta'] == 0]['weight_delta'] == 0).all()
-
-        # Any changed results should have participated in the simulation, ignore others
-        results = results[results['weight_delta'] != 0.0]
-        assert (results['alpha'] + results['beta'] > 0.95).all()
+    for future in as_completed(futures):
+        results = future.result()
         all_diffs.append(results)
 
     all_diffs = pd.concat(all_diffs)
-    timestamp = str(time()).replace('.', '')
-    all_diffs.to_pickle(f"data/all_diffs_{timestamp}.pkl")
+    all_diffs.to_pickle("data/all_diffs.pkl")
     return all_diffs
 
 

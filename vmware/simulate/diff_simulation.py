@@ -152,23 +152,16 @@ def likelihood_not_random(diff, actual_dcg_delta):
 
 def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev=0.02, verbose=False,
                        dcg_diff_std_dev=None):
-    """Simulate a single ranking change and account for the actual dcg delta by guessing result relevance.
+    """Simulate a single ranking diff and account for the actual dcg delta by guessing result relevance.
 
     For each oserved query/doc ranking change:
-    - alpha counts simulations explaining the change when query/doc grade=1 (relevant),
+    - alpha counts plausible simulations where query/doc grade=1 (relevant),
     - beta when its grade=0 (not relevant).
 
-    More specifically, alpha/beta don't _count_, they accumulate the probability the simulated universe's DCG equals the actual
-    The `dcg_diff_std_dev` is the standard deviation of the actual DCG change used to calibrate how exact this should be. It defaults to
-    0.01 * sqrt(number of queries).
+    Essentially each alpha / beta are counting a bernouli process (coin flip), and represent a binomial distribution
+    https://en.wikipedia.org/wiki/Binomial_distribution
 
-    The algorithim iterates, incrementing alpha and beta approriately, based on the observed DCG diff of random
-    relevance grades. The alphas and betas keep incrementing untilthe std dev falls below the converge_std_dev threshold.
-    That is, they're not really changing much more relative to each other.
-
-    Then the alpha/beta are scaled back to the plausible_universes.
-
-    Combining this diff with other diffs is left as an exercise for the caller. Simply summing can underweight very certain scenarios,
+    Combining this binomial distribution with other diffs is left as an exercise for the caller. Simply summing can underweight very certain scenarios,
     relative to much more uncertain ones. So you may wish to consider `prob_not_random` and `plausible_universes` to adjust
     alpha/beta before combining with other diffs.
 
