@@ -3,7 +3,7 @@ import numpy as np
 import itertools
 from time import time
 import os.path
-from vmware.simulate.diff_simulation import estimate_relevance, ideal_dcg_at_5, create_results_diff, likelihood_not_random
+from vmware.simulate.diff_simulation import estimate_relevance, ideal_dcg_at_5, create_results_diff, likelihood_not_random, best_runs
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -46,24 +46,9 @@ def significant_diffs(results):
     return results_by_significance
 
 
-def information_amount(all_diffs, midpoint=0.6, skew=1000000):
-    """Scale the rels and not_rels to the available information. Diff close to 1 perfect info. Close to 0, very
-       very imperfect info."""
-    # See graph here https://www.desmos.com/calculator/0wah7odcqh
-    deltas = np.abs(all_diffs['rels'] - all_diffs['not_rels'])
-    return skew ** (deltas - midpoint)
-
-
 def grade_judgments(all_diffs):
-    all_diffs['weight'] = information_amount(all_diffs)
-
-    all_diffs['rels'] *= all_diffs['weight']
-    all_diffs['not_rels'] *= all_diffs['weight']
-    judgments = \
-        all_diffs.groupby(['QueryId', 'DocumentId'])[['rels', 'not_rels']].sum()
-    judgments['grade'] = judgments['rels'] / (judgments['rels'] + judgments['not_rels'])
-    judgments['grade_std_dev'] = np.sqrt((judgments['rels'] * judgments['not_rels']) /
-                                         (((judgments['rels'] + judgments['not_rels'])**2) * (1 + judgments['rels'] + judgments['not_rels'])))
+    judgments = best_runs(all_diffs)
+    judgments['grade'] = judgments['rels']
     return judgments
 
 
@@ -135,6 +120,7 @@ def run_diffs(results):
         all_diffs.append(results)
 
     all_diffs = pd.concat(all_diffs)
+
     all_diffs.to_pickle("data/all_diffs.pkl")
     return all_diffs
 

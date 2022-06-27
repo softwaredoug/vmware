@@ -1,7 +1,7 @@
 import pandas as pd
 import math
 import pytest
-from vmware.simulate.diff_simulation import create_results_diff, estimate_relevance
+from vmware.simulate.diff_simulation import create_results_diff, estimate_relevance, best_runs
 
 
 def dcg_weight_at(rank):
@@ -77,6 +77,37 @@ def test_best_case_prob_not_random_not_random(best_case_diff):
         "Given the diff is best case, prob_not_random should be high"
     assert judgment_5678['prob_not_random'].iloc[0] == pytest.approx(1.0, 0.05), \
         "Given the diff is best case, prob_not_random should be high"
+
+
+def test_best_case_entropy_less_than_ambiguous_case(best_case_diff, ambiguous_diff):
+    best_case_diff, best_case_actual_dcg_delta = best_case_diff
+    best_case_diff = estimate_relevance(best_case_diff, best_case_actual_dcg_delta)
+
+    ambig_case_diff, ambig_case_actual_dcg_delta = ambiguous_diff
+    ambig_case_diff = estimate_relevance(ambig_case_diff, ambig_case_actual_dcg_delta)
+
+    entropies = best_case_diff.merge(ambig_case_diff, how='left', on=['QueryId', 'DocumentId'])[['entropy_x', 'entropy_y']]
+    assert (entropies['entropy_x'] < entropies['entropy_y']).all()
+
+
+def test_best_case_trumps_ambig_case(best_case_diff, ambiguous_diff):
+    best_case_diff, best_case_actual_dcg_delta = best_case_diff
+    best_case_diff = estimate_relevance(best_case_diff, best_case_actual_dcg_delta)
+
+    ambig_case_diff, ambig_case_actual_dcg_delta = ambiguous_diff
+    ambig_case_diff = estimate_relevance(ambig_case_diff, ambig_case_actual_dcg_delta)
+
+    all_diffs = pd.concat([best_case_diff, ambig_case_diff])
+    combined = best_runs(all_diffs)
+
+    # Best case has unambiguous information that should be taken heavily
+    poor_doc_rels = combined.loc[(1, '1234')]['rels']
+    poor_doc_not_rels = combined.loc[(1, '1234')]['not_rels']
+    assert (10 * poor_doc_rels) < poor_doc_not_rels
+
+    good_doc_rels = combined.loc[(1, '5678')]['rels']
+    good_doc_not_rels = combined.loc[(1, '5678')]['not_rels']
+    assert (10 * good_doc_not_rels) < good_doc_rels
 
 
 def test_best_case_diff_certain(best_case_diff):

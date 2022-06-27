@@ -161,7 +161,7 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
     https://en.wikipedia.org/wiki/Binomial_distribution
 
     Combining this binomial distribution with other diffs is left as an exercise for the caller. Simply summing can underweight very certain scenarios,
-    relative to much more uncertain ones. So you may wish to consider `prob_not_random` and `plausible_universes` to adjust
+    relative to much more uncertain ones. So you may wish to consider `prob_not_random` and `universes` to adjust
     rels/not_rels before combining with other diffs.
 
     Returns modified diff dataframe adding columns:
@@ -171,8 +171,9 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
         - prob_not_random: probability a randomly chosen position that was moved up or down is relevant
           - this is kind of a uniform distribution over the changed relevance, and can be thought of as
             kind of a context-indepentent prior (here context would be the DCG weight of the position changed)
-        - plausible_universes: the total probability density of universes that occured in this simulation
+        - universes: the total probability density of universes that occured in this simulation
           before rels and not_rels converged.
+        - entropy: the shannon entropy between rels / not_rels
 
           The more universes that occured, the more simulations were required, and less certain the predictions are.
 
@@ -193,9 +194,7 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
     # likelihood_not_random is 0 -> 0.5
     # likelihood_not_random is 1 -> 0.9
     prob_positive = (((diff['prob_not_random'].iloc[0] / 2) + 0.5) - 0.01)
-    best_universe_prob = 0.0
-
-    plausible_universe_prob = 0
+    universes = 0
 
     # If the probability of observing actual DCG at random is pretty high
     # then we shouldn't increment rels and not_rels too much
@@ -251,13 +250,16 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
             rels_times_not_rels = diff.loc[changed, 'rels'] * diff.loc[changed, 'not_rels']
             rels_plus_not_rels = diff.loc[changed, 'rels'] + diff.loc[changed, 'not_rels']
 
+            # If treating rels / not rels as beta dist
+            # Which (I think) approximates the binomial variance of the sample proportion
             variances = (rels_times_not_rels /
                          ((rels_plus_not_rels**2) * (1 + rels_plus_not_rels)))
 
-            # As binomial distribution (the multiplication of n - number of trials - is
-            # already in the accumulating values
-            # However, this never converges, and only ever increases with more trials
-            # variances = rels_times_not_rels
+            # The binomial std deviation squared means we could likel compute the following instead:
+            # seemingly according to 'std dev of the sample proportion'
+            # https://stats.stackexchange.com/questions/85818/variance-of-sample-proportion-decreases-with-n-but-of-a-count-increases-with-n
+            # variances = (rels_times_not_rels /
+            #             (1 + rels_plus_not_rels))
 
             biggest_var = variances.max()
 
@@ -268,15 +270,12 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
         update_scaled = 1 - universe_prob
         update = learning_rate * update_scaled * _sign(delta)
         prob_positive += update
-        plausible_universe_prob += universe_prob
-
-        if universe_prob > best_universe_prob:
-            best_universe_prob = universe_prob
+        universes += universe_prob
 
         if verbose and rounds % 100 == 0:
             not_rand = diff['prob_not_random'].iloc[0]
             msg = f"Sim: {simulated_dcg_delta:.2f}, Act: {actual_dcg_delta:.2f}({dcg_diff_std_dev:.3f}), Best: {best_case_dcg_delta:.3f} | "
-            msg += f"TotUniv: {plausible_universe_prob:.3f} | Var? {biggest_var:.4f}=>{converge_var:.4f}"
+            msg += f"TotUniv: {universes:.3f} | Var? {biggest_var:.4f}=>{converge_var:.4f}"
             msg += f"| Upd {update:.4f}, Draw {prob_positive:.4f}, NotRand: {not_rand:.5f}"
             msg += f" | {num_grades_changed} changed | {rounds}/{perf_counter() - start:.3f}s"
             print(msg)
@@ -286,20 +285,26 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
             diff['prob_positive'] = prob_positive
             break
 
-    # rels - proportion of plausible universes that have this grade as 1
-    # not_rels - proportion of plausible universes that have this grade as 0
-    # plausible_universes - accumulated probability density of all explored universes
-    diff['rels'] /= plausible_universe_prob
-    diff['not_rels'] /= plausible_universe_prob
-    diff['plausible_universes'] = plausible_universe_prob
-    diff['best_universe_prob'] = best_universe_prob
+    diff['rels'] /= universes
+    diff['not_rels'] /= universes
+    diff['universes'] = universes
+    diff['entropy'] = -(diff['rels'] * np.log(diff['rels'])
+                        + diff['not_rels'] * np.log(diff['not_rels']))
+    diff['std_dev'] = np.sqrt(diff['rels'] * diff['not_rels'] * diff['universes'])
+
     prob_not_random = diff['prob_not_random'] = (prob_positive - 0.5) * 2
 
     print(f"BestCase: {best_case_dcg_delta}; Observed: {actual_dcg_delta}")
-    print(f"Likelihood: {prob_not_random:.2f} | Total Universe Prob: {plausible_universe_prob:.2f}")
+    print(f"Likelihood: {prob_not_random:.2f} | Total Universe Prob: {universes:.2f}")
     cols = ['QueryId', 'DocumentId', 'position_before', 'position_after', 'weight_delta', 'rels', 'not_rels']
     print(diff[diff['grade_changed']][cols].sort_values('rels', ascending=False))
 
     # _debug_query(diff, 0)
     # _debug_query(diff, 1)
     return diff
+
+
+def best_runs(all_diffs):
+    combined = all_diffs.sort_values('entropy').drop_duplicates(['QueryId', 'DocumentId'])
+    combined = combined.groupby(['QueryId', 'DocumentId']).first()
+    return combined
