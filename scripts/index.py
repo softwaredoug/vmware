@@ -65,7 +65,8 @@ def main(version):
     es = Elasticsearch()
     if version == 0:
         rebuild(es, index='vmware',
-                doc_src=corpus())
+                doc_src=corpus(),
+                configs_dir='vmware')
     elif version == 1:
         enrich(es, index='vmware',
                enrich_fn=use.enrichment,
