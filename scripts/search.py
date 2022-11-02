@@ -7,7 +7,8 @@ import pandas as pd
 # Best baseline thusfar
 # from .rerank_simple_slop_search import \
 #    rerank_slop_search_remaining_lines_max_snippet_at_5
-from vmware.search.compound_search import with_best_compounds_at_5_only_phrase_search
+# from vmware.search.compound_search import with_best_compounds_at_5_only_phrase_search
+from vmware.search.mpnet_mean import mpnet_direct_query
 
 
 def damage(results1, results2, at=10):
@@ -42,7 +43,7 @@ def damage(results1, results2, at=10):
 
 
 def search(query,
-           strategy=with_best_compounds_at_5_only_phrase_search):
+           strategy=mpnet_direct_query):
     print(query)
     es = Elasticsearch('http://localhost:9200', timeout=30, max_retries=10,
                        retry_on_status=True, retry_on_timeout=True)
@@ -56,8 +57,8 @@ def search(query,
         print("----------------------------------")
 
 
-def submission(baseline=with_best_compounds_at_5_only_phrase_search,
-               test=with_best_compounds_at_5_only_phrase_search,
+def submission(baseline=mpnet_direct_query,
+               test=mpnet_direct_query,
                verbose=False):
     """Search all test queries to generate a submission."""
     queries = pd.read_csv('data/test.csv')
@@ -123,4 +124,4 @@ def diff_results(all_results):
 
 
 if __name__ == "__main__":
-    search(argv[1])
+    search(argv[1], strategy=mpnet_direct_query)

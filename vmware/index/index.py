@@ -3,6 +3,7 @@ import json
 import os
 from time import perf_counter
 from elasticsearch.exceptions import NotFoundError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def resp_msg(msg, resp, throw=True):
@@ -16,7 +17,7 @@ def resp_msg(msg, resp, throw=True):
 version_field = "enrich_version"
 
 
-def enrich(es, index, enrich_fn, mapping, version, workers=2):
+def enrich(es, index, enrich_fn, mapping, version, sort_field='guid', workers=2):
     """Incrementally enrich documents not yet at the specified version."""
     search_scroll_body = {
         "query": {
@@ -31,36 +32,52 @@ def enrich(es, index, enrich_fn, mapping, version, workers=2):
     if mapping is not None:
         es.indices.put_mapping(index=index, body=mapping)
 
-    def scanner():
-        start = perf_counter()
-        for idx, doc in enumerate(elasticsearch.helpers.scan(es, index=index, scroll='5m',
-                                                             size=1000,
-                                                             query=search_scroll_body)):
-
-            curr_version = int(doc['_source'][version_field])
-
-            assert version == curr_version + 1
-
-            doc['_source'] = enrich_fn(doc['_source'])
-            doc["_source"][version_field] = version
+    def process_futures(futures):
+        for future in as_completed(futures):
+            doc_source = future.result()
+            doc_source[version_field] = version
             try:
                 yield {
                     "_op_type": "update",
                     "_index": index,
-                    "_id": doc['_id'],
-                    "doc": doc['_source']
+                    "_id": doc_source['id'],
+                    "doc": doc_source
                 }
 
-                # return self.es.update(index=index, id=doc['_id'], body={"doc": doc['_source']})
             except NotFoundError:
-                print(f"Document {doc['_id']} not found, skipping")
+                print(f"Document {doc_source['id']} not found, skipping")
+
+    def scanner(query=search_scroll_body, enrich_workers=10):
+        start = perf_counter()
+
+        # We can use a with statement to ensure threads are cleaned up promptly
+        executor = ThreadPoolExecutor(max_workers=enrich_workers)
+        futures = []
+        for idx, doc in enumerate(elasticsearch.helpers.scan(es, index=index,
+                                                             scroll='5m',
+                                                             size=200,
+                                                             query=query)):
+
+            curr_version = int(doc['_source'][version_field])
+            assert version == curr_version + 1, "somehow are enriching the wrong doc"
+            assert doc['_source']['id'] == doc['_id'], "id missing from _source"
+            futures.append(executor.submit(enrich_fn, doc['_source']))
+
+            if len(futures) > enrich_workers:
+
+                yield from process_futures(futures)
+                futures = []
 
             if idx % 100 == 0:
                 print(f"Enriched {idx} documents -- {perf_counter() - start}")
                 print("--------")
+        yield from process_futures(futures)
 
-    resps = elasticsearch.helpers.parallel_bulk(es, scanner(), thread_count=workers,
-                                                chunk_size=100, request_timeout=120)
+    # resps = elasticsearch.helpers.parallel_bulk(es, scanner(), thread_count=workers,
+    #                                             chunk_size=100, request_timeout=120)
+    resps = elasticsearch.helpers.streaming_bulk(es, scanner(),
+                                                 chunk_size=100,
+                                                 request_timeout=120)
     for success, resp in resps:
         if not success:
             print("Failure -- ")

@@ -5,6 +5,7 @@ import elasticsearch.helpers
 from elasticsearch import Elasticsearch
 from time import perf_counter
 
+
 class Colocations:
 
     def __init__(self):
@@ -13,8 +14,8 @@ class Colocations:
         self.scores = defaultdict(lambda: {})   # every term paired with other terms that occur after it
         self.first_counts = Counter()  # count of when term goes first
         self.second_counts = Counter()  # count of when term goes first
-        self.N = 0 # total number of pairs
-        self.snippets = 0 # total number of snippets
+        self.N = 0  # total number of pairs
+        self.snippets = 0  # total number of snippets
 
     # See https://opensourceconnections.com/blog/2019/05/16/unreasonable-effectiveness-of-collocations/
     def _batch_score(self):
@@ -50,7 +51,6 @@ class Colocations:
                                    'score': score})
         return pd.DataFrame(scores).sort_values('score', ascending=False)
 
-
     def scores_to_dataframe(self, min_count=50, min_snippet_count=70):
         scores = []
         for first, seconds in self.scores.items():
@@ -71,7 +71,6 @@ class Colocations:
         else:
             return pd.DataFrame([])
 
-
     def add_text(self, texts):
         """
         :param text: a string
@@ -90,8 +89,7 @@ class Colocations:
                 self.first_counts[first] += 1
                 self.second_counts[second] += 1
 
-
-                unique_terms.add( (first,second) )
+                unique_terms.add((first, second))
 
                 together = self.first_terms[first][second]
                 first_total = self.first_counts[first]
@@ -111,7 +109,6 @@ class Colocations:
             self.snippet_counts[first][second] += 1
 
 
-
 def scan_index(index, query={"_source": ["raw_text"], "query": {"match_all": {}}}):
     """Compute colocation and compound scores for the corpus."""
     es = Elasticsearch('http://localhost:9200', timeout=30, max_retries=10,
@@ -122,9 +119,6 @@ def scan_index(index, query={"_source": ["raw_text"], "query": {"match_all": {}}
                                                          size=1000,
                                                          query=query)):
         collocations.add_text(doc['_source']['raw_text'].split("\n")[:5])
-        #collocations.add_text(doc['_source']['first_line'])
-        #for line in doc['_source']['remaining_lines'][:10]:
-        #    collocations.add_text(line)
         if idx % 10000 == 0:
             print(f"Scanned {idx} documents -- {perf_counter() - start}")
             print(collocations.scores_to_dataframe().head(10))
@@ -134,21 +128,10 @@ def scan_index(index, query={"_source": ["raw_text"], "query": {"match_all": {}}
 
 def scan_queries():
     """Compute colocation and compound scores for test queries."""
-    start = perf_counter()
     collocations = Colocations()
     queries = pd.read_csv('data/test.csv')
     for query in queries.Query:
         collocations.add_text([query])
-        #collocations.add_text(doc['_source']['first_line'])
-        #for line in doc['_source']['remaining_lines'][:10]:
-        #    collocations.add_text(line)
     print(collocations.scores_to_dataframe(min_count=0, min_snippet_count=0).head(10))
     colos = collocations.scores_to_dataframe(min_count=0, min_snippet_count=0)
     colos.to_pickle('colocs_queries.pkl')
-
-
-
-if __name__ == "__main__":
-    from sys import argv
-    client = ElasticClient()
-    scan_index(client, 'vmware')

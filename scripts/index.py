@@ -12,12 +12,14 @@ import pandas as pd
 from vmware.index.index import rebuild, enrich
 
 # enrichment migrations
+# from vmware.index.modal import vmware_stub
 from vmware.index import use
 from vmware.index import first_line
 from vmware.index import remaining_lines
 from vmware.index import use_remaining_lines
 from vmware.index import first_remaining_lines
 from vmware.index import three_lines_together
+from vmware.index import sentence_transformer
 from elasticsearch import Elasticsearch
 
 
@@ -93,6 +95,10 @@ def main(version):
         enrich(es, index='vmware',
                enrich_fn=three_lines_together.enrichment,
                mapping=three_lines_together.mapping, version=version)
+    elif version == 7:
+        enrich(es, index='vmware',
+               enrich_fn=sentence_transformer.enrichment,
+               mapping=sentence_transformer.mapping, version=version)
 
 
 if __name__ == "__main__":
