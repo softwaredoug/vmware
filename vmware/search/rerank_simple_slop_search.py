@@ -4,59 +4,8 @@ from .splainer import splainer_url
 from .query_cache import MemoizeQuery
 
 
-@MemoizeQuery
-def rerank_slop_search_remaining_lines_max_snippet_at_5(es, query):
-    """Rerank with USE on top of best pure BM25 submission on
-       29-May NDCG 0.31569; 05-June NDCG 0.31574"""
-    body = {
-        'size': 5,
-        'query': {
-            'bool': {'should': [
-                {'match_phrase': {
-                    'remaining_lines': {
-                        'slop': 10,
-                        'query': query
-                    }
-                }},
-                {'match_phrase': {
-                    'first_line': {
-                        'slop': 10,
-                        'query': query
-                    }
-                }},
-                # MAIN CHANGE -
-                # use remaining_lines instead of raw_text
-                # remaining_lines are longer > 20 char lines
-                {'match': {
-                    'remaining_lines': {
-                        'query': query
-                    }
-                }},
-                {'match': {
-                    'first_line': {
-                        'query': query
-                    }
-                }},
-            ]}
-        }
-    }
-
-    print(json.dumps(body, indent=2))
-
-    hits = es.search(index='vmware', body=body)['hits']['hits']
-
-    for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] \
-            = passage_similarity_long_lines(query, hit, verbose=False)
-        hit['_source']['splainer'] = splainer_url(es_body=body)
-
-    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
-    hits = hits[:5]
-    return hits
-
-
 def max_passage_rerank_first_remaining_lines(es, query):
-    """Try only the earliest remaining lines for matching (NDCG, 0.29)"""
+    """Try only the earliest remaining lines for matching (NDCG, 0.29)."""
     body = {
         'size': 5,
         'query': {

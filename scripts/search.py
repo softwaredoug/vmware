@@ -8,19 +8,22 @@ import pandas as pd
 # from .rerank_simple_slop_search import \
 #    rerank_slop_search_remaining_lines_max_snippet_at_5
 # from vmware.search.compound_search import with_best_compounds_at_5_only_phrase_search
-from vmware.search.mpnet_mean import mpnet_direct_query
+from vmware.search.chatgpt_mlt import chatgpt_mlt
+from vmware.search.rerank_simple_slop_search import \
+    rerank_simple_slop_search_max_snippet_at_5
 
 
 def damage(results1, results2, at=10):
-    """ How "damaging" could the change from results1 -> results2 be?
-        (results1, results2 are an array of document identifiers)
-        For each result in result1,
-            Is the result in result2[:at]
-                If so, how far has it moved?
-            If not,
-                Consider it a move of at+1
-            damage += discount(idx) * moveDist
-                """
+    """How "damaging" could the change from results1 -> results2 be.
+
+    (results1, results2 are an array of document identifiers)
+    For each result in result1,
+        Is the result in result2[:at]
+            If so, how far has it moved?
+        If not,
+            Consider it a move of at+1
+        damage += discount(idx) * moveDist
+    """
 
     def discount(idx):
         return 1.0 / log(idx + 2)
@@ -43,7 +46,7 @@ def damage(results1, results2, at=10):
 
 
 def search(query,
-           strategy=mpnet_direct_query):
+           strategy=rerank_simple_slop_search_max_snippet_at_5):
     print(query)
     es = Elasticsearch('http://localhost:9200', timeout=30, max_retries=10,
                        retry_on_status=True, retry_on_timeout=True)
@@ -53,12 +56,15 @@ def search(query,
         print(hit['_source']['title'] if 'title' in hit['_source'] else '',
               '||',
               hit['_source']['first_line'])
-        print(f"MAX SIM {hit['_source']['max_sim']} | SCORE {hit['_score']}")
+        max_sim = 'NA'
+        if 'max_sim' in hit['_source']:
+            max_sim = hit['_source']['max_sim']
+        print(f"MAX SIM {max_sim} | SCORE {hit['_score']}")
         print("----------------------------------")
 
 
-def submission(baseline=mpnet_direct_query,
-               test=mpnet_direct_query,
+def submission(baseline=rerank_simple_slop_search_max_snippet_at_5,
+               test=chatgpt_mlt,
                verbose=False):
     """Search all test queries to generate a submission."""
     queries = pd.read_csv('data/test.csv')
@@ -124,4 +130,4 @@ def diff_results(all_results):
 
 
 if __name__ == "__main__":
-    search(argv[1], strategy=mpnet_direct_query)
+    search(argv[1], strategy=chatgpt_mlt)

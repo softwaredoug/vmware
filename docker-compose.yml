@@ -18,6 +18,13 @@ services:
       SERVER_NAME: "elasticsearch"
     volumes:
       - tlre-es-data:/usr/share/elasticsearch/data
+  splainer:
+    platform: linux/amd64
+    image: o19s/splainer
+    ports:
+     - "9000:9000"
+    expose:
+      - "9000"
 
 volumes:
   tlre-es-data:

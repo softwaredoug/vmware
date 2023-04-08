@@ -1,31 +1,26 @@
-import tensorflow_text   # noqa: F401
-import tensorflow_hub as hub
-
 from numpy import dot
 from numpy.linalg import norm
-
-use_path = "https://tfhub.dev/google/universal-sentence-encoder-multilingual/3"
-_use = hub.load(use_path)
+from vmware.vector.use import encode
 
 
 def use_rescore_query(es_body, rescore_depth, query, vector_field='raw_text_use'):
-    query_vector = _use(query)
+    query_vector = encode(query)
     es_body['rescore'] = {
         "window_size": rescore_depth,
         "query": {
-          "rescore_query": {
-            "script_score": {
-              "query": {
-                "match_all": {}
-              },
-              "script": {
-                "source": f"cosineSimilarity(params.query_vector, '{vector_field}') + 1.0",
-                "params": {"query_vector": query_vector}
-              }
+            "rescore_query": {
+                "script_score": {
+                    "query": {
+                        "match_all": {}
+                    },
+                    "script": {
+                        "source": f"cosineSimilarity(params.query_vector, '{vector_field}') + 1.0",
+                        "params": {"query_vector": query_vector}
+                    }
+                }
             }
-          }
         }
-      }
+    }
     return es_body
 
 
@@ -42,11 +37,11 @@ def passage_similarity_long_lines(query, hit,
     for line in source['remaining_lines']:
         if len(line) > 20:
             lines.append(line)
-    query_use = _use(query).numpy()[0]
+    query_use = encode(query)
     max_sim = -1.0
     sum_sim = 0.0
     for line, vector in zip(lines, vectors):
-        cos_sim = dot(vector, query_use)/(norm(vector)*norm(query_use))
+        cos_sim = dot(vector, query_use) / (norm(vector) * norm(query_use))
         sum_sim += cos_sim
         max_sim = max(max_sim, cos_sim)
         num_stars = 10 * (cos_sim + 1)

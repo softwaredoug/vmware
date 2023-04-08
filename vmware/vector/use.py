@@ -1,8 +1,13 @@
-import tensorflow_text  # NOQA: F401
-import tensorflow_hub as hub
+from sentence_transformers import SentenceTransformer
 
-_use = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
+
+model_name = 'ronanki/ml_use_512_MNR_15'
+model = SentenceTransformer(model_name)
 
 
 def encode(text):
-    return _use(text).numpy()[0]
+    encoded = model.encode(text)
+    if encoded.shape != (512,):
+        import pdb; pdb.set_trace()
+    assert encoded.shape == (512,)
+    return encoded
