@@ -49,10 +49,74 @@ def max_passage_rerank_first_remaining_lines(es, query):
     return hits
 
 
-@MemoizeQuery
+def rerank_simple_slop_search(es, query, params):
+    """Rerank simple slop search thats searchable."""
+    rerank_depth = int(params['rerank_depth'])
+
+    if rerank_depth < 5:
+        raise ValueError("Rerank depth must be at least 5")
+
+    body = {
+        'size': rerank_depth,
+        'query': {
+            'bool': {'should': [
+                {'match_phrase': {
+                    'remaining_lines': {
+                        'slop': int(params['remaining_lines_slop']),
+                        'query': query,
+                        'boost': float(params['remaining_lines_phrase_boost'])
+                    }
+                }},
+                {'match_phrase': {
+                    'first_line': {
+                        'slop': int(params['first_line_slop']),
+                        'query': query,
+                        'boost': float(params['first_line_phrase_boost'])
+                    }
+                }},
+                {'match': {
+                    'raw_text': {
+                        'query': query,
+                        'boost': float(params['raw_text_boost'])
+                    }
+                }},
+                {'match': {
+                    'first_line': {
+                        'query': query,
+                        'boost': float(params['first_line_boost'])
+                    }
+                }},
+            ]}
+        }
+    }
+
+    hits = es.search(index='vmware', body=body)['hits']['hits']
+
+    for hit in hits:
+        hit['_source']['max_sim'], hit['_source']['sum_sim'] = \
+            passage_similarity_long_lines(query, hit, verbose=False)
+        hit['_source']['splainer'] = splainer_url(es_body=body)
+
+    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
+    hits = hits[:5]
+    return hits
+
+
+# Searchable params for optimization.
+rerank_simple_slop_search.params = ['remaining_lines_slop',
+                                    'first_line_slop',
+                                    'remaining_lines_phrase_boost',
+                                    'first_line_phrase_boost',
+                                    'raw_text_boost',
+                                    'first_line_boost',
+                                    'rerank_depth']
+
+
 def rerank_simple_slop_search_max_snippet_at_5(es, query):
     """Rerank top 5 submissions by max passage USE similarity.
-       NDCG of 0.30562."""
+
+    NDCG of 0.30562.
+    """
     body = {
         'size': 5,
         'query': {

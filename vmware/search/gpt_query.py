@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import json
 import os
 import openai
+import csv
 from sys import argv
 
 load_dotenv()
@@ -39,9 +40,11 @@ def understand_nl_query(prompt, query):
     return response
 
 
-def queries_to_articles(prompt, queries):
-    for query in queries:
-        yield query, understand_nl_query(prompt, query)
+def queries_to_articles(prompt, reader):
+    for row in reader:
+        query = row['Query']
+        query_id = int(row['QueryId'])
+        yield query_id, query, understand_nl_query(prompt, query)
 
 
 def load_query_database(filename='query_database.1.json'):
@@ -67,16 +70,13 @@ def articles_for_queries(filename: str):
             raise ValueError(f"Key {key} is not a valid key")
 
     with open('data/test.csv', 'r') as f:
-        queries_to_process = [line.split(',')[1] for line in f.readlines()
-                              if line.split(',')[1] not in query_database['questions'].keys()]
-        print(f"Processing {len(queries_to_process)} queries")
-        idx = 0
-        for query, article in queries_to_articles(prompt, queries_to_process):
+        reader = csv.DictReader(f)
+        for query_id, query, article in queries_to_articles(prompt, reader):
             print(query)
-            query_database['questions'][query] = article
-            idx += 1
-            if idx % 10 == 0:
-                print(f"Completed {idx} queries")
+            query_database['questions'][query] = {'article': article,
+                                                  'query_id': query_id}
+            if query_id % 10 == 0:
+                print(f"Completed {query_id} queries")
                 json.dump(query_database, open(filename, 'w'))
         json.dump(query_database, open(filename, 'w'))
 

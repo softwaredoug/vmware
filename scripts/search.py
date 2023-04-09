@@ -2,6 +2,8 @@
 from sys import argv
 import sys
 from elasticsearch import Elasticsearch
+from collections import defaultdict
+import pickle
 import random
 from math import log
 
@@ -13,7 +15,7 @@ import pandas as pd
 sys.path.insert(0, '.')
 from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402
 from vmware.search.rerank_simple_slop_search import \
-    rerank_simple_slop_search_max_snippet_at_5  # noqa: E402
+    rerank_simple_slop_search_max_snippet_at_5, rerank_simple_slop_search  # noqa: E402, F401
 
 
 def damage(results1, results2, at=10):
@@ -88,31 +90,72 @@ def submission(strategy=chatgpt_mlt):
     write_submission(df, strategy.__name__)
 
 
-def random_search(strategy=chatgpt_mlt, params=['body_mlt_boost', 'title_mlt_boost']):
+def random_search(strategy=chatgpt_mlt,
+                  num_queries=100, at=5, runs=40):
     max_score = 0.0
+    params = strategy.params
     best_params = {param: -1.0 for param in params}
+    try:
+        best_doc_per_query = pickle.load(open('best_doc_per_query.pkl', 'rb'))
+    except FileNotFoundError:
+        print("RESTARTING best docs")
+        best_doc_per_query = defaultdict(lambda: {'score': 0.0, 'doc_id': '', 'params': {}})
     queries = pd.read_csv('data/test.csv')
     es = Elasticsearch('http://localhost:9200', timeout=30, max_retries=10,
                        retry_on_status=True, retry_on_timeout=True)
     param_history = []
-    for i in range(0, 10):
+    for i in range(0, runs):
         params_dict = {param: random.uniform(0.1, 100.0) for param in params}
+        params_good = False
 
         curr_score = 0.0
         for idx, query in enumerate(queries.to_dict(orient='records')):
-            results = strategy(es, query=query['Query'], params=params_dict)
-            for rank, result in enumerate(results):
-                curr_score += result['_source']['max_sim']
 
+            # Ensure valid params
+            tries = 0
+            results = None
+            while not params_good:
+                try:
+                    results = strategy(es, query=query['Query'], params=params_dict)
+                    params_good = True
+                    break
+                except ValueError:
+                    params_dict = {param: random.uniform(0.1, 100.0) for param in params}
+                    if tries > 100:
+                        raise ValueError("Could not find valid params")
+                tries += 1
+            results = strategy(es, query=query['Query'], params=params_dict)
+
+            query_score = 0.0
+            for rank, result in enumerate(results):
+                doc_score = result['_source']['max_sim']
+                query_score += result['_source']['max_sim']
+                if doc_score > best_doc_per_query[query['QueryId']]['score']:
+                    best_doc_per_query[query['QueryId']]['score'] = result['_source']['max_sim']
+                    best_doc_per_query[query['QueryId']]['doc_id'] = result['_source']['id']
+                    best_doc_per_query[query['QueryId']]['params'] = params_dict
+                    best_doc_per_query[query['QueryId']]['strategy'] = strategy.__name__
+                    best_doc_per_query[query['QueryId']]['query'] = query['Query']
+                if rank >= at - 1:
+                    query_score /= at
+                    curr_score += query_score
+                    break
+            if idx >= num_queries:
+                curr_score /= (idx + 1)
+                print(idx, query['Query'], best_doc_per_query[query['QueryId']])
                 break
-            if idx % 100 == 0:
-                print(idx, query['Query'], params_dict, best_params, max_score)
         if curr_score > max_score:
             max_score = curr_score
             best_params = params_dict
-            print(f"New best score {max_score} with params {best_params}")
-        param_history.append(params_dict)
-    return param_history
+        print("----------")
+        print("----------")
+        print(f"CURR BEST SCORE {max_score} with params {best_params}")
+        pickle.dump(dict(best_doc_per_query), open('best_doc_per_query.pkl', 'wb'))
+        param_history.append({'params': params_dict, 'score': curr_score,
+                              'strategy': strategy.__name__})
+        as_df = pd.DataFrame(param_history)
+        as_df.to_csv('param_history.csv', mode='a', header=False)
+    return param_history, best_doc_per_query
 
 
 def debug(baseline=rerank_simple_slop_search_max_snippet_at_5,
