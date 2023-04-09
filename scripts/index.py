@@ -95,10 +95,6 @@ def main(version):
         enrich(es, index='vmware',
                enrich_fn=three_lines_together.enrichment,
                mapping=three_lines_together.mapping, version=version)
-    elif version == 7:
-        enrich(es, index='vmware',
-               enrich_fn=sentence_transformer.enrichment,
-               mapping=sentence_transformer.mapping, version=version)
 
 
 if __name__ == "__main__":

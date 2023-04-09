@@ -8,9 +8,10 @@ from vmware.simulate.multiple import run_diffs, significant_diffs, grade_judgmen
 # NDCG at 5
 ndcgs = {
     None: 0.0,  # Causes each NDCG to be looked at in isolation, not just as a diff
-    'runs/turnbull_submission_1652543571065569.csv': 0.0,   # This one was submitted on accident, but still valid info
+    # 'runs/turnbull_submission_1652543571065569.csv': 0.0,   # This one was submitted on accident, but still valid info
     'runs/noise.csv': 0.00060,          # Randomly shuffled results, everything here should end up irrelevant for its query
     'runs/use_feedback_rrf_turnbull_submission_1653226391886872.csv': 0.16806,
+    'runs/chatgpt_mlt_turnbull_168095807535608.csv': 0.20775,
     'runs/turnbull_submission_1652544680901428.csv': 0.20911,
     'runs/simulated_labels_turnbull.csv': 0.26169,
     'runs/simulated_every_combination_unweighted_turnbull_16561689617190552.csv': 0.28237,

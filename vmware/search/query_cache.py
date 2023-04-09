@@ -61,7 +61,8 @@ class MemoizeQuery:
             cache_line = {'query': query, 'results': essential_fields(self.memo[query])}
             self.cache_file.write(json.dumps(cache_line) + '\n')
 
-        except KeyError:
-            raise ValueError('Must pass query as kwarg to MemoizeQuery')
+        except KeyError as e:
+            import pdb; pdb.set_trace()
+            raise ValueError(f"Must pass query as kwarg to MemoizeQuery - {kwargs} - {e}")
         # Warning: You may wish to do a deepcopy here if returning objects
         return self.memo[query]

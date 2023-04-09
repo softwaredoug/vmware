@@ -2,7 +2,7 @@ import urllib.parse
 import json
 
 
-def splainer_url(splainer='http://splainer.io/#/es_',
+def splainer_url(splainer='http://localhost:9000/#/es_',
                  es_url='http://localhost:9200',
                  es_body={},
                  es_index='vmware',

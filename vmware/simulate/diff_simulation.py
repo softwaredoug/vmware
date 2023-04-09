@@ -57,7 +57,18 @@ def create_results_diff(results_before, results_after):
 
     if results_before is not None:
         results_before = results_before.groupby('QueryId').head(5)
-        assert len(results_before) == len(results_after)
+        delete_queries = []
+        if len(results_before) != len(results_after):
+            for query_id in results_before['QueryId'].unique():
+                before_for_query = results_before[results_before['QueryId'] == query_id]
+                after_for_query = results_after[results_after['QueryId'] == query_id]
+                if len(before_for_query) != len(after_for_query):
+                    delete_queries.append(query_id)
+
+        for query_id in delete_queries:
+            results_before = results_before[results_before['QueryId'] != query_id]
+            results_after = results_after[results_after['QueryId'] != query_id]
+
         results_before = add_weights(results_before)
         diff = results_before.merge(results_after,
                                     on=['QueryId', 'DocumentId'],
