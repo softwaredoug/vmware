@@ -26,6 +26,19 @@ def prompt2():
     return prompt
 
 
+def prompt3():
+    prompt = """
+In search relevance, users type in search queries that don't match the vocabulary used in the underlying corpus. This is known as the 'vocabulary problem'. Some important reasons for the vocabulary problem - the author of the article in the corpus does not use the same terminology as the searcher.
+
+Given a corpus of VMWare technical documentation, blog posts, and forum posts, please propose some alternate, equivalent synonyms, alternate forms, similar terms, tags, and other possible expansions for the search query below. Note it's very important to come up with synonyms that expand one word to multiple words or vice-versa.
+
+Please list the response as a numbered list with no explanation. Here's the query:
+
+> {query}
+    """
+    return prompt
+
+
 def understand_nl_query(prompt, query):
     prompt = prompt.format(query=query)
 
@@ -40,11 +53,15 @@ def understand_nl_query(prompt, query):
     return response
 
 
-def queries_to_articles(prompt, reader):
+def queries_to_articles(prompt, reader, cache):
     for row in reader:
         query = row['Query']
         query_id = int(row['QueryId'])
-        yield query_id, query, understand_nl_query(prompt, query)
+        if query in cache.keys():
+            print(f"Found {query} in cache")
+            yield query_id, query, cache[query]['article']
+        else:
+            yield query_id, query, understand_nl_query(prompt, query)
 
 
 def load_query_database(filename='query_database.1.json'):
@@ -57,7 +74,7 @@ def load_query_database(filename='query_database.1.json'):
 def articles_for_queries(filename: str):
     query_database = load_query_database(filename)
     if 'prompt' not in query_database.keys():
-        query_database['prompt'] = prompt1()
+        query_database['prompt'] = prompt3()
     prompt = query_database['prompt']
     if prompt != prompt2():
         print("Prompt has changed. Should you reprocess all queries?")
@@ -71,13 +88,16 @@ def articles_for_queries(filename: str):
 
     with open('data/test.csv', 'r') as f:
         reader = csv.DictReader(f)
-        for query_id, query, article in queries_to_articles(prompt, reader):
+        for query_id, query, article in queries_to_articles(prompt, reader, query_database['questions']):
+            print("----")
             print(query)
-            query_database['questions'][query] = {'article': article,
-                                                  'query_id': query_id}
-            if query_id % 10 == 0:
-                print(f"Completed {query_id} queries")
-                json.dump(query_database, open(filename, 'w'))
+            print(article)
+            if query not in query_database['questions'].keys():
+                query_database['questions'][query] = {'article': article,
+                                                      'query_id': query_id}
+                if query_id % 10 == 0:
+                    print(f"Completed {query_id} queries")
+                    json.dump(query_database, open(filename, 'w'))
         json.dump(query_database, open(filename, 'w'))
 
 

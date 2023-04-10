@@ -79,7 +79,7 @@ def chatgpt_mlt(es, query, params):
             raise ValueError("No items to use")
 
         assert len(query_database[query]['first_line']) == len(query_database[query]['raw_text'])
-        assert len(query_database[query]['first_line']) == 4
+        assert len(query_database[query]['first_line']) == 5
 
         first_lines_to_use = better_item_getter(item_indices, query_database[query]['first_line'])
         raw_text_to_use = better_item_getter(item_indices, query_database[query]['raw_text'])
@@ -166,7 +166,7 @@ def chatgpt_mlt(es, query, params):
 
 
 chatgpt_mlt.params = ['body_mlt_boost', 'title_mlt_boost',
-                      'use_1', 'use_2', 'use_3', 'use_4', 'use_query',
+                      'use_1', 'use_2', 'use_3', 'use_4', 'use_5', 'use_query',
                       'rerank_depth', 'first_line_slop', 'first_line_boost',
                       'first_line_phrase_boost', 'remaining_lines_slop',
                       'remaining_lines_phrase_boost', 'raw_text_boost']
