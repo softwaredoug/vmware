@@ -5,6 +5,8 @@ from collections import defaultdict
 from elasticsearch import Elasticsearch
 import concurrent.futures
 import pandas as pd
+import os
+
 
 import sys
 
@@ -13,12 +15,19 @@ sys.path.insert(0, '.')
 from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402
 
 
+def ensure_dir():
+    os.makedirs('data/random_search', exist_ok=True)
+
+
+ensure_dir()
+
+
 class BestDocsPerQuery:
     """Track the best document per query as per semantic similarity."""
 
     def __init__(self):
         try:
-            self.best_doc_per_query = pickle.load(open('best_doc_per_query.pkl', 'rb'))
+            self.best_doc_per_query = pickle.load(open('data/random_search/best_doc_per_query.pkl', 'rb'))
         except FileNotFoundError:
             self.best_doc_per_query = defaultdict(lambda: {'score': 0.0, 'doc_id': '', 'params': {}})
 
@@ -34,7 +43,7 @@ class BestDocsPerQuery:
             self.best_doc_per_query[query_id]['query'] = query
 
     def save(self):
-        pickle.dump(self.best_doc_per_query, open('best_doc_per_query.pkl', 'wb'))
+        pickle.dump(self.best_doc_per_query, open('data/random_search/best_doc_per_query.pkl', 'wb'))
 
 
 class ParamsHistory:
@@ -49,7 +58,7 @@ class ParamsHistory:
         self.history.append({'params': params, 'score': score,
                              'strategy': strategy.__name__})
         as_df = pd.DataFrame(self.history)
-        fname = f"param_history_{self.timestamp}.csv"
+        fname = f"data/random_search/param_history_{self.timestamp}.csv"
         print(f"Writting param history to {fname}")
         as_df.to_csv(fname)
         if score > self.best_score:
