@@ -134,12 +134,12 @@ def random_search(strategy=chatgpt_mlt,
                                                best_doc_per_query, num_queries, at))
             for future in concurrent.futures.as_completed(futures):
                 curr_score, params_dict = future.result()
+                params_history.add_params(params_dict, curr_score, strategy)
+                best_doc_per_query.save()
                 print("----------")
                 print(f"LAST SCORE      {curr_score} with params {params_dict}")
                 print("----------")
                 print(f"CURR BEST SCORE {params_history.best_score} with params {params_history.best_params}")
-                best_doc_per_query.save()
-                params_history.add_params(params_dict, curr_score, strategy)
 
     return params_history, best_doc_per_query
 
