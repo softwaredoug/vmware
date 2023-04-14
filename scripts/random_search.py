@@ -13,6 +13,7 @@ import sys
 sys.path.insert(0, '.')
 
 from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402
+from vmware.search.rerank_simple_slop_search import rerank_simple_slop_search  # noqa: E402
 
 
 def ensure_dir():
@@ -43,7 +44,7 @@ class BestDocsPerQuery:
             self.best_doc_per_query[query_id]['query'] = query
 
     def save(self):
-        pickle.dump(self.best_doc_per_query, open('data/random_search/best_doc_per_query.pkl', 'wb'))
+        pickle.dump(dict(self.best_doc_per_query), open('data/random_search/best_doc_per_query.pkl', 'wb'))
 
 
 class ParamsHistory:
@@ -66,10 +67,12 @@ class ParamsHistory:
             self.best_params = params
 
 
-def build_valid_params(es, test_query, strategy):
+def build_valid_params(es, test_query, strategy, hard_coded):
     """Build a set of valid params for a given strategy."""
     params = strategy.params
     params_dict = {param: random.uniform(0.1, 100.0) for param in params}
+    for key, value in hard_coded.items():
+        params_dict[key] = value
     params_good = False
     tries = 0
     while not params_good:
@@ -79,6 +82,8 @@ def build_valid_params(es, test_query, strategy):
             break
         except ValueError:
             params_dict = {param: random.uniform(0.1, 100.0) for param in params}
+            for key, value in hard_coded.items():
+                params_dict[key] = value
             if tries > 100:
                 raise ValueError("Could not find valid params")
         tries += 1
@@ -87,11 +92,13 @@ def build_valid_params(es, test_query, strategy):
 
 def execute_run(strategy, es, queries,
                 best_doc_per_query,
-                num_queries=100,
+                num_queries=500,
+                hard_coded={},
                 at=5):
     params_dict = build_valid_params(es,
                                      test_query=queries[0]['Query'],
-                                     strategy=strategy)
+                                     strategy=strategy,
+                                     hard_coded=hard_coded)
     curr_score = 0.0
     for idx, query in enumerate(queries):
         results = strategy(es, query=query['Query'], params=params_dict)
@@ -117,7 +124,8 @@ def execute_run(strategy, es, queries,
 
 
 def random_search(strategy=chatgpt_mlt,
-                  num_queries=100, at=5):
+                  num_queries=100, at=5,
+                  hard_coded={}):
     best_doc_per_query = BestDocsPerQuery()
     queries = pd.read_csv('data/test.csv').to_dict(orient='records')
     es = Elasticsearch('http://localhost:9200', timeout=30, max_retries=10,
@@ -131,7 +139,7 @@ def random_search(strategy=chatgpt_mlt,
             futures = []
             for _ in range(0, concurrent_runs):
                 futures.append(executor.submit(execute_run, strategy, es, queries,
-                                               best_doc_per_query, num_queries, at))
+                                               best_doc_per_query, num_queries, hard_coded, at))
             for future in concurrent.futures.as_completed(futures):
                 curr_score, params_dict = future.result()
                 params_history.add_params(params_dict, curr_score, strategy)
@@ -145,6 +153,8 @@ def random_search(strategy=chatgpt_mlt,
 
 
 if __name__ == '__main__':
-    params_history, best_doc_per_query = random_search()
+    print("Running random search, stop with Ctrl+C")
+    params_history, best_doc_per_query = random_search(strategy=chatgpt_mlt,
+                                                       hard_coded={'rerank_depth': 100})
     print("----------")
     print(f"FINAL BEST SCORE {params_history.best_score} with params {params_history.test_params}")

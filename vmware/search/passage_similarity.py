@@ -1,6 +1,7 @@
 from numpy import dot
 from numpy.linalg import norm
 from vmware.vector.use import encode
+from time import perf_counter
 
 
 def use_rescore_query(es_body, rescore_depth, query, vector_field='raw_text_use'):
@@ -24,9 +25,13 @@ def use_rescore_query(es_body, rescore_depth, query, vector_field='raw_text_use'
     return es_body
 
 
+encoded_query_cache = {}
+
+
 def passage_similarity_long_lines(query, hit,
                                   verbose=False,
                                   remaining_lines=True):
+    # start = perf_counter()
     source = hit['_source']
     vectors = [source['first_line_use']]
     for idx in range(0, 10):
@@ -37,7 +42,13 @@ def passage_similarity_long_lines(query, hit,
     for line in source['remaining_lines']:
         if len(line) > 20:
             lines.append(line)
-    query_use = encode(query)
+    # print(f"Lines gathered {perf_counter() - start}")
+    try:
+        query_use = encoded_query_cache[query]
+    except KeyError:
+        query_use = encode(query)
+        encoded_query_cache[query] = query_use
+    # print(f"Query Encoded {perf_counter() - start}")
     max_sim = -1.0
     sum_sim = 0.0
     for line, vector in zip(lines, vectors):

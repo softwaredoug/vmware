@@ -39,6 +39,39 @@ Please list the response as a numbered list with no explanation. Here's the quer
     return prompt
 
 
+def prompt4():
+    return """
+Here are some basic definitions I want you to understand about interpreting search queries:
+
+* Phrase searches - searches wrapped in quotes that search for that exact phrase to increase precision of the query. IE instead of searching just `doug turnbull` searching `"doug turnbull"` ensures the words occur together
+
+* Collocations - two word phrases that frequently occur together in an English corpus. For example Palo Alto - these two words rarely occur by themselves in an English corpus. Instead they are more commonly encountered as a single concept
+
+I'm going to give you a search query, please return alternate search queries as a list of strings with two-word collocations quoted
+
+For example, if I asked for the query
+
+network companies
+
+You might respond with the following.
+
+* networking startups
+* networking companies
+* "silicon valley" internet corporations
+* company that does "software engineering" for Ethernet
+...
+* "palo alto" networks
+
+Notice how only two word phrases are quoted, and these quoted phrases are common concepts in an American English corpus likely to improve the precision of the original search query.
+
+Please do only include a bulleted list with *'s for bullets and no natural language explanation. Please include 10 responses total.
+
+Here is the query:
+
+> {query}
+"""
+
+
 def understand_nl_query(prompt, query):
     prompt = prompt.format(query=query)
 
@@ -74,9 +107,9 @@ def load_query_database(filename='query_database.1.json'):
 def articles_for_queries(filename: str):
     query_database = load_query_database(filename)
     if 'prompt' not in query_database.keys():
-        query_database['prompt'] = prompt3()
+        query_database['prompt'] = prompt4()
     prompt = query_database['prompt']
-    if prompt != prompt2():
+    if prompt != prompt4():
         print("Prompt has changed. Should you reprocess all queries?")
 
     if 'questions' not in query_database.keys():
