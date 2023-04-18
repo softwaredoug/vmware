@@ -41,16 +41,25 @@ def max_passage_rerank_first_remaining_lines(es, query):
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] \
-            = passage_similarity_long_lines(query, hit, verbose=False)
+        passage_similarity_long_lines(query, hit, verbose=False)
 
-    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
+    hits = sorted(hits, key=lambda x: x['_source']['max_sim_use'], reverse=True)
     hits = hits[:5]
     return hits
 
 
-def rerank_simple_slop_search(es, query, params):
+# {'params': "{'remaining_lines_slop': 47.63520251060285, 'first_line_slop': 0.8821132834922828, 'remaining_lines_phrase_boost': 58.64932266988522, 'first_line_phrase_boost': 17.531640642316926, 'raw_text_boost': 30.171807009555824, 'first_line_boost': 29.69587572832043, 'rerank_depth': 100}", 'score': 0.7671198228519489}
+def rerank_simple_slop_search(es, query, params=None):
     """Rerank simple slop search thats searchable."""
+    if params is None:
+        params = {'remaining_lines_slop': 47.63520251060285,
+                  'first_line_slop': 0.8821132834922828,
+                  'remaining_lines_phrase_boost': 58.64932266988522,
+                  'first_line_phrase_boost': 17.531640642316926,
+                  'raw_text_boost': 30.171807009555824,
+                  'first_line_boost': 29.69587572832043,
+                  'rerank_depth': 100}
+
     rerank_depth = int(params['rerank_depth'])
 
     if rerank_depth < 5:
@@ -93,11 +102,10 @@ def rerank_simple_slop_search(es, query, params):
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] = \
-            passage_similarity_long_lines(query, hit, verbose=False)
+        passage_similarity_long_lines(query, hit, verbose=False)
         hit['_source']['splainer'] = splainer_url(es_body=body)
 
-    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
+    hits = sorted(hits, key=lambda x: x['_source']['max_sim_use'], reverse=True)
     hits = hits[:5]
     return hits
 
@@ -152,11 +160,10 @@ def rerank_simple_slop_search_max_snippet_at_5(es, query):
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] = \
-            passage_similarity_long_lines(query, hit, verbose=False)
+        passage_similarity_long_lines(query, hit, verbose=False)
         hit['_source']['splainer'] = splainer_url(es_body=body)
 
-    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
+    hits = sorted(hits, key=lambda x: x['_source']['max_sim_use'], reverse=True)
     hits = hits[:5]
     return hits
 
@@ -164,7 +171,9 @@ def rerank_simple_slop_search_max_snippet_at_5(es, query):
 @MemoizeQuery
 def rerank_simple_slop_search_sum_snippets_at_5(es, query):
     """Rerank top 5 submissions by SUM of passage USE similarity.
-       NDCG of 0.30550"""
+
+    NDCG of 0.30550
+    """
     body = {
         'size': 5,
         'query': {
@@ -200,8 +209,7 @@ def rerank_simple_slop_search_sum_snippets_at_5(es, query):
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] = \
-            passage_similarity_long_lines(query, hit, verbose=False)
+        passage_similarity_long_lines(query, hit, verbose=False)
         hit['_source']['splainer'] = splainer_url(es_body=body)
 
     hits = sorted(hits, key=lambda x: x['_source']['sum_sim'], reverse=True)
@@ -211,7 +219,7 @@ def rerank_simple_slop_search_sum_snippets_at_5(es, query):
 
 @MemoizeQuery
 def rerank_slop_search_max_passage_rerank_at_10(es, query):
-    """Rerank top 50 submissions by max passage USE similarity"""
+    """Rerank top 50 submissions by max passage USE similarity."""
     body = {
         'size': 10,
         'query': {
@@ -247,18 +255,17 @@ def rerank_slop_search_max_passage_rerank_at_10(es, query):
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] =\
-            passage_similarity_long_lines(query, hit, verbose=False)
+        passage_similarity_long_lines(query, hit, verbose=False)
         hit['_source']['splainer'] = splainer_url(es_body=body)
 
-    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
+    hits = sorted(hits, key=lambda x: x['_source']['max_sim_use'], reverse=True)
     hits = hits[:5]
     return hits
 
 
 @MemoizeQuery
 def max_passage_rerank_at_50(es, query):
-    """Rerank top 50 submissions by max passage USE similarity"""
+    """Rerank top 50 submissions by max passage USE similarity."""
     body = {
         'size': 50,
         'query': {
@@ -294,10 +301,9 @@ def max_passage_rerank_at_50(es, query):
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] =\
-            passage_similarity_long_lines(query, hit, verbose=False)
+        passage_similarity_long_lines(query, hit, verbose=False)
         hit['_source']['splainer'] = splainer_url(es_body=body)
 
-    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
+    hits = sorted(hits, key=lambda x: x['_source']['max_sim_use'], reverse=True)
     hits = hits[:5]
     return hits

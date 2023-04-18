@@ -6,14 +6,14 @@ from elasticsearch import Elasticsearch
 import concurrent.futures
 import pandas as pd
 import os
-
+import glob
 
 import sys
 
 sys.path.insert(0, '.')
 
-from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402
-from vmware.search.rerank_simple_slop_search import rerank_simple_slop_search  # noqa: E402
+from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402, F401
+from vmware.search.rerank_simple_slop_search import rerank_simple_slop_search  # noqa: E402, F401
 
 
 def ensure_dir():
@@ -105,8 +105,8 @@ def execute_run(strategy, es, queries,
 
         query_score = 0.0
         for rank, result in enumerate(results):
-            doc_score = result['_source']['max_sim']
-            query_score += result['_source']['max_sim']
+            doc_score = result['_source']['max_sim_mpnet']
+            query_score += doc_score
             best_doc_per_query.add_doc(query_id=query['QueryId'],
                                        query=query['Query'],
                                        doc_id=result['_source']['id'],
@@ -152,9 +152,26 @@ def random_search(strategy=chatgpt_mlt,
     return params_history, best_doc_per_query
 
 
+def read_all_csv(path='data/random_search'):
+    all_files = glob.glob(os.path.join(path, "*.csv"))
+    df_from_each_file = (pd.read_csv(f) for f in all_files)
+    return pd.concat(df_from_each_file, ignore_index=True)
+
+
+hardcoded = {'use_1': 51.206125364348992,
+             'use_2': 51.685299030133455,
+             'use_3': 51.07842982196352,
+             'use_4': 51.53141784404721,
+             'use_5': 51.70771331344108,
+             'use_6': 51.70771331344108,
+             'use_query': 51.9313524558668638,
+             'rerank_depth': 100}
+
+
 if __name__ == '__main__':
     print("Running random search, stop with Ctrl+C")
     params_history, best_doc_per_query = random_search(strategy=chatgpt_mlt,
-                                                       hard_coded={'rerank_depth': 100})
+
+                                                       hard_coded=hardcoded)
     print("----------")
     print(f"FINAL BEST SCORE {params_history.best_score} with params {params_history.test_params}")

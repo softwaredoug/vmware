@@ -1,13 +1,11 @@
-from sentence_transformers import SentenceTransformer
+from .model_encoder import ModelEncoder
 
 
 model_name = 'ronanki/ml_use_512_MNR_15'
-model = SentenceTransformer(model_name)
+model = ModelEncoder(model_name, dims=512)
 
 
-def encode(text):
-    encoded = model.encode(text)
-    if encoded.shape != (512,):
-        import pdb; pdb.set_trace()
+def encode(text, cached=True):
+    encoded = model.encode(text, cached=cached)
     assert encoded.shape == (512,)
     return encoded

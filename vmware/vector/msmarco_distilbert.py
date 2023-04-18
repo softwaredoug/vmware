@@ -1,6 +1,6 @@
 from .model_encoder import ModelEncoder
 
-model_name = 'all-mpnet-base-v2'
+model_name = 'msmarco-distilbert-base-v3'
 model = ModelEncoder(model_name, dims=768)
 
 

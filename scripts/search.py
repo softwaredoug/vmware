@@ -66,7 +66,7 @@ def search(query,
         print("----------------------------------")
 
 
-def submission(strategy=chatgpt_mlt):
+def submission(strategy=rerank_simple_slop_search):
     queries = pd.read_csv('data/test.csv')
     all_results = []
     es = Elasticsearch('http://localhost:9200', timeout=30, max_retries=10,

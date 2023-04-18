@@ -96,7 +96,28 @@ def better_item_getter(indices, src):
         return list(itemgetter(*indices)(src))
 
 
-def chatgpt_mlt(es, query, params):
+# 'params': "{'body_mlt_boost': 42.19607013804867, 'title_mlt_boost': 91.85675452219638, 'use_1': 17.206125364348992, 'use_2': 10.685299030133455, 'use_3': 83.07842982196352, 'use_4': 71.53141784404721, 'use_5': 83.70771331344108, 'use_query': 3.9313524558668638, 'rerank_depth': 100, 'first_line_slop': 25.02441523449979, 'first_line_boost': 23.980411594706087, 'first_line_phrase_boost': 79.6874768935059, 'remaining_lines_slop': 36.897887258147726, 'remaining_lines_phrase_boost': 51.50271184475267, 'raw_text_boost': 54.340333413958}"},
+def chatgpt_mlt(es, query, params=None):
+
+    if params is None:
+        params = {'body_mlt_boost': 42.19607013804867,
+                  'title_mlt_boost': 91.85675452219638,
+                  'body_expansion_boost': 0.0,
+                  'title_expansion_boost': 0.0,
+                  'use_1': 17.206125364348992,
+                  'use_2': 10.685299030133455,
+                  'use_3': 83.07842982196352,
+                  'use_4': 71.53141784404721,
+                  'use_5': 83.70771331344108,
+                  'use_6': 0.0,
+                  'use_query': 3.9313524558668638,
+                  'rerank_depth': 100,
+                  'first_line_slop': 25.02441523449979,
+                  'first_line_boost': 23.980411594706087,
+                  'first_line_phrase_boost': 79.6874768935059,
+                  'remaining_lines_slop': 36.897887258147726,
+                  'remaining_lines_phrase_boost': 51.50271184475267,
+                  'raw_text_boost': 54.340333413958}
 
     try:
         items = query_database[query]['first_line']
@@ -109,7 +130,7 @@ def chatgpt_mlt(es, query, params):
             raise ValueError("No items to use")
 
         assert len(query_database[query]['first_line']) == len(query_database[query]['raw_text'])
-        assert len(query_database[query]['first_line']) == 5
+        assert len(query_database[query]['first_line']) == 6
 
         first_lines_to_use = better_item_getter(item_indices, query_database[query]['first_line'])
         raw_text_to_use = better_item_getter(item_indices, query_database[query]['raw_text'])
@@ -208,16 +229,14 @@ def chatgpt_mlt(es, query, params):
             }
         }
     }
-    import pdb; pdb.set_trace()
 
     hits = es.search(index='vmware', body=body)['hits']['hits']
     for hit in hits:
         hit['_source']['splainer'] = splainer_url(es_body=body)
 
     for hit in hits:
-        hit['_source']['max_sim'], hit['_source']['sum_sim'] \
-            = passage_similarity_long_lines(query, hit, verbose=False)
-    hits = sorted(hits, key=lambda x: x['_source']['max_sim'], reverse=True)
+        passage_similarity_long_lines(query, hit, verbose=False)
+    hits = sorted(hits, key=lambda x: x['_source']['max_sim_use'], reverse=True)
     hits = hits[:10]
     return hits
 

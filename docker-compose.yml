@@ -25,7 +25,20 @@ services:
      - "9000:9000"
     expose:
       - "9000"
+  redis:
+    platform: linux/amd64
+    image: 'bitnami/redis:latest'
+    ports:
+     - "6379:6379"
+    expose:
+      - "6379"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - tlre-redis-data:/bitnami/redis/data
 
 volumes:
   tlre-es-data:
+    driver: local
+  tlre-redis-data:
     driver: local
