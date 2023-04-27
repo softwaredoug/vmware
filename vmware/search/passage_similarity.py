@@ -59,8 +59,6 @@ def passage_similarity_long_lines(query, hit,
             cos_sims[model_name] = (dot(encoding, query_encodings[model_name]) / (norm(encoding) * norm(query_encodings[model_name])))
             sum_sims[model_name] = sum_sims[model_name] + cos_sims[model_name]
             max_sims[model_name] = max(max_sims[model_name], cos_sims[model_name])
-            if model_name == 'mpnet':
-                print(max_sims[model_name])
         first_key = list(encoders.keys())[0]
         num_stars = 10 * (cos_sims[first_key] + 1)
         num_lines += 1

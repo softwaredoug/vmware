@@ -1,6 +1,7 @@
 import json
-from operator import itemgetter
 from collections import defaultdict
+from operator import itemgetter
+
 from .passage_similarity import passage_similarity_long_lines
 from .splainer import splainer_url
 
@@ -98,32 +99,43 @@ def better_item_getter(indices, src):
 
 # 'params': "{'body_mlt_boost': 42.19607013804867, 'title_mlt_boost': 91.85675452219638, 'use_1': 17.206125364348992, 'use_2': 10.685299030133455, 'use_3': 83.07842982196352, 'use_4': 71.53141784404721, 'use_5': 83.70771331344108, 'use_query': 3.9313524558668638, 'rerank_depth': 100, 'first_line_slop': 25.02441523449979, 'first_line_boost': 23.980411594706087, 'first_line_phrase_boost': 79.6874768935059, 'remaining_lines_slop': 36.897887258147726, 'remaining_lines_phrase_boost': 51.50271184475267, 'raw_text_boost': 54.340333413958}"},
 def chatgpt_mlt(es, query, params=None):
-
     if params is None:
-        params = {'body_mlt_boost': 42.19607013804867,
-                  'title_mlt_boost': 91.85675452219638,
-                  'body_expansion_boost': 0.0,
-                  'title_expansion_boost': 0.0,
-                  'use_1': 17.206125364348992,
-                  'use_2': 10.685299030133455,
-                  'use_3': 83.07842982196352,
-                  'use_4': 71.53141784404721,
-                  'use_5': 83.70771331344108,
-                  'use_6': 0.0,
-                  'use_query': 3.9313524558668638,
-                  'rerank_depth': 100,
-                  'first_line_slop': 25.02441523449979,
-                  'first_line_boost': 23.980411594706087,
-                  'first_line_phrase_boost': 79.6874768935059,
-                  'remaining_lines_slop': 36.897887258147726,
-                  'remaining_lines_phrase_boost': 51.50271184475267,
-                  'raw_text_boost': 54.340333413958}
+        params = {
+            'body_mlt_boost': 42.19607013804867,
+            'title_mlt_boost': 91.85675452219638,
+            'body_expansion_boost': 0.0,
+            'title_expansion_boost': 0.0,
+            'use_1': 17.206125364348992,
+            'use_2': 10.685299030133455,
+            'use_3': 83.07842982196352,
+            'use_4': 71.53141784404721,
+            'use_5': 83.70771331344108,
+            'use_6': 0.0,
+            'use_query': 3.9313524558668638,
+            'rerank_depth': 100,
+            'first_line_slop': 25.02441523449979,
+            'first_line_boost': 23.980411594706087,
+            'first_line_phrase_boost': 79.6874768935059,
+            'remaining_lines_slop': 36.897887258147726,
+            'remaining_lines_phrase_boost': 51.50271184475267,
+            'raw_text_boost': 54.340333413958,
+            'title_mlt_min_term_freq': 1.0,
+            'title_mlt_min_word_length': 1.0,
+            'title_mlt_min_doc_freq': 1.0,
+            'title_mlt_max_query_terms': 100.0,
+            'body_mlt_min_term_freq': 1.0,
+            'body_mlt_min_word_length': 1.0,
+            'body_mlt_min_doc_freq': 1.0,
+            'body_mlt_max_query_terms': 100.0,
+            'body_expansions_boost': 1.0,
+            'title_expansions_boost': 1.0
+        }
 
     try:
         items = query_database[query]['first_line']
         item_indices = []
         for idx, item in enumerate(items):
-            if params[f"use_{idx+1}"] > 50.0:
+            if params[f"use_{idx + 1}"] > 50.0:
                 item_indices.append(idx)
 
         if len(item_indices) == 0:
@@ -134,8 +146,8 @@ def chatgpt_mlt(es, query, params=None):
 
         first_lines_to_use = better_item_getter(item_indices, query_database[query]['first_line'])
         raw_text_to_use = better_item_getter(item_indices, query_database[query]['raw_text'])
-        first_lines = ' | ' .join(first_lines_to_use)
-        article = ' | ' .join(raw_text_to_use)
+        first_lines = ' | '.join(first_lines_to_use)
+        article = ' | '.join(raw_text_to_use)
 
         if params['use_query'] > 50.0:
             first_lines = query + ' | ' + first_lines
@@ -153,8 +165,10 @@ def chatgpt_mlt(es, query, params=None):
     if rerank_depth < 5:
         raise ValueError("Rerank depth must be at least 5")
 
-    for mlt_param in ['title_mlt_min_term_freq', 'title_mlt_min_word_length', 'title_mlt_min_doc_freq', 'title_mlt_max_query_terms',
-                      'body_mlt_min_term_freq', 'body_mlt_min_word_length', 'body_mlt_min_doc_freq', 'body_mlt_max_query_terms']:
+    for mlt_param in ['title_mlt_min_term_freq', 'title_mlt_min_word_length', 'title_mlt_min_doc_freq',
+                      'title_mlt_max_query_terms',
+                      'body_mlt_min_term_freq', 'body_mlt_min_word_length', 'body_mlt_min_doc_freq',
+                      'body_mlt_max_query_terms']:
         if int(params[mlt_param]) < 1:
             raise ValueError(f"{mlt_param} must be at least 1")
 
@@ -206,10 +220,10 @@ def chatgpt_mlt(es, query, params=None):
                                 "first_line",
                             ],
                             "like": first_lines,
-                            "min_term_freq":int(params['title_mlt_min_term_freq']),
-                            "min_word_length":int(params['title_mlt_min_word_length']),
-                            "min_doc_freq":int(params['title_mlt_min_doc_freq']),
-                            "max_query_terms":int(params['title_mlt_max_query_terms'])
+                            "min_term_freq": int(params['title_mlt_min_term_freq']),
+                            "min_word_length": int(params['title_mlt_min_word_length']),
+                            "min_doc_freq": int(params['title_mlt_min_doc_freq']),
+                            "max_query_terms": int(params['title_mlt_max_query_terms'])
                         }
                     },
                     {
@@ -219,10 +233,10 @@ def chatgpt_mlt(es, query, params=None):
                                 "raw_text"
                             ],
                             "like": article,
-                            "min_term_freq":int(params['body_mlt_min_term_freq']),
-                            "min_word_length":int(params['body_mlt_min_word_length']),
-                            "min_doc_freq":int(params['body_mlt_min_doc_freq']),
-                            "max_query_terms":int(params['body_mlt_max_query_terms'])
+                            "min_term_freq": int(params['body_mlt_min_term_freq']),
+                            "min_word_length": int(params['body_mlt_min_word_length']),
+                            "min_doc_freq": int(params['body_mlt_min_doc_freq']),
+                            "max_query_terms": int(params['body_mlt_max_query_terms'])
                         }
                     },
                 ]
