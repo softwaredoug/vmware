@@ -14,6 +14,7 @@ sys.path.insert(0, '.')
 from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402
 from vmware.search.rerank_simple_slop_search import \
     rerank_simple_slop_search_max_snippet_at_5, rerank_simple_slop_search  # noqa: E402, F401
+from vmware.search.compound_search import with_best_compounds_at_5_only_phrase_search  # noqa: E402, F401
 
 
 def damage(results1, results2, at=10):
@@ -59,10 +60,13 @@ def search(query,
         print(hit['_source']['title'] if 'title' in hit['_source'] else '',
               '||',
               hit['_source']['first_line'])
-        max_sim = 'NA'
-        if 'max_sim' in hit['_source']:
-            max_sim = hit['_source']['max_sim']
-        print(f"MAX SIM {max_sim} | SCORE {hit['_score']}")
+        max_sim_mpnet = 'NA'
+        max_sim_use = 'NA'
+        if 'max_sim_mpnet' in hit['_source']:
+            max_sim_mpnet = hit['_source']['max_sim_mpnet']
+        if 'max_sim_use' in hit['_source']:
+            max_sim_use = hit['_source']['max_sim_use']
+        print(f"MAX SIM MPNET {max_sim_mpnet} | MAX SIM USE {max_sim_use} | ES SCORE {hit['_score']}")
         print("----------------------------------")
 
 
@@ -154,4 +158,4 @@ def diff_results(all_results):
 
 
 if __name__ == "__main__":
-    search(argv[1], strategy=chatgpt_mlt)
+    search(argv[1], strategy=with_best_compounds_at_5_only_phrase_search)
