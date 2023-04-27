@@ -45,8 +45,8 @@ def passage_similarity_long_lines(query, hit,
             lines.append(line)
 
     query_encodings = {model_name: model(query) for model_name, model in encoders.items()}
-    max_sim = {model_name: -1.0 for model_name in encoders}
-    sum_sim = {model_name: 0.0 for model_name in encoders}
+    max_sims = {model_name: -1.0 for model_name in encoders}
+    sum_sims = {model_name: 0.0 for model_name in encoders}
 
     num_lines = 0
     if verbose:
@@ -54,18 +54,18 @@ def passage_similarity_long_lines(query, hit,
         print(query)
     for line in lines:
         cos_sims = {}
-        sum_sims = {}
-        max_sims = {}
         for model_name, model in encoders.items():
             encoding = model(line)
             cos_sims[model_name] = (dot(encoding, query_encodings[model_name]) / (norm(encoding) * norm(query_encodings[model_name])))
-            sum_sims[model_name] = sum_sim[model_name] + cos_sims[model_name]
-            max_sims[model_name] = max(max_sim[model_name], cos_sims[model_name])
+            sum_sims[model_name] = sum_sims[model_name] + cos_sims[model_name]
+            max_sims[model_name] = max(max_sims[model_name], cos_sims[model_name])
+            if model_name == 'mpnet':
+                print(max_sims[model_name])
         first_key = list(encoders.keys())[0]
         num_stars = 10 * (cos_sims[first_key] + 1)
         num_lines += 1
         if verbose:
-            print(f"{cos_sims[first_key]:.2f}", "*" * int(num_stars), " " * (20 - int(num_stars)), line[:40])
+            print(f"{first_key} {cos_sims[first_key]:.2f}", "*" * int(num_stars), " " * (20 - int(num_stars)), line[:40])
         if not remaining_lines:
             break
 
