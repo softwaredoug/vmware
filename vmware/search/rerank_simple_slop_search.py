@@ -69,16 +69,16 @@ def rerank_simple_slop_search(es, query, params=None):
         'size': rerank_depth,
         'query': {
             'bool': {'should': [
-                {'match_phrase': {
+                {'match_phrase': {        # what is a hypervisor      <-- all terms within 10 words
                     'remaining_lines': {
-                        'slop': int(params['remaining_lines_slop']),
+                        'slop': 10,   # int(params['remaining_lines_slop']),
                         'query': query,
                         'boost': float(params['remaining_lines_phrase_boost'])
                     }
                 }},
                 {'match_phrase': {
                     'first_line': {
-                        'slop': int(params['first_line_slop']),
+                        'slop': 10,  # int(params['first_line_slop']),
                         'query': query,
                         'boost': float(params['first_line_phrase_boost'])
                     }

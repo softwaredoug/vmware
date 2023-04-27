@@ -135,3 +135,18 @@ def scan_queries():
     print(collocations.scores_to_dataframe(min_count=0, min_snippet_count=0).head(10))
     colos = collocations.scores_to_dataframe(min_count=0, min_snippet_count=0)
     colos.to_pickle('colocs_queries.pkl')
+
+
+try:
+    queries = pd.read_pickle('colocs_queries.pkl')
+except FileNotFoundError:
+    print("Rebuilding the query colocs")
+    scan_queries()
+    queries = pd.read_pickle('colocs_queries.pkl')
+
+try:
+    index = pd.read_pickle('colocs.pkl')
+except FileNotFoundError:
+    print("Rebuilding the index colocs")
+    scan_index(index='vmware')
+    index = pd.read_pickle('colocs.pkl')

@@ -117,6 +117,8 @@ def execute_run(strategy, es, queries,
                 query_score /= at
                 curr_score += query_score
                 break
+        if idx % 100 == 0:
+            print(f"Completed {idx} queries")
         if idx >= num_queries - 1:
             curr_score /= (idx + 1)
             break
