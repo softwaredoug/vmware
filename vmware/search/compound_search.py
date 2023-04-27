@@ -1,18 +1,31 @@
 from .passage_similarity import passage_similarity_long_lines
 from .splainer import splainer_url
 from .query_cache import MemoizeQuery
-import json
 
 from vmware.search.compounds import most_freq_compound_strategy, to_compound_query, \
     most_freq_compound_corpus_strategy, most_freq_compound_both_strategy
 
 
-@MemoizeQuery
 def with_best_compounds_at_50_plus_10_times_use(es, query, params=None, rerank=True):
     """Shot in the dark on multiplying the USE score differently.
 
     adding 10* to BM25 instead of replacing BM25 score. Best on 5 - June NDCG 0.31643
     """
+    if params is None:
+        params = {
+            'rerank_depth': 50,
+            'remaining_lines_slop': 10,
+            'first_line_slop': 10,
+            'remaining_lines_phrase_boost': 1.0,
+            'remaining_lines_phrase_decomp_boost': 1.0,
+            'first_line_phrase_boost': 1.0,
+            'first_line_phrase_decomp_boost': 1.0,
+            'first_line_boost': 1.0,
+            'remaining_lines_boost': 1.0,
+            'use_weight': 10.0,
+            'elasticsearch_score_weight': 1.0,
+        }
+
     to_decompound, to_compound = most_freq_compound_strategy[0], most_freq_compound_strategy[1]
     body = {
         'size': 50,
@@ -20,24 +33,28 @@ def with_best_compounds_at_50_plus_10_times_use(es, query, params=None, rerank=T
             'bool': {'should': [
                 {'match_phrase': {
                     'remaining_lines': {
-                        'slop': 10,
+                        'slop': int(params['remaining_lines_slop']),
+                        'boost': params['remaining_lines_phrase_boost'],
                         'query': query
                     }
                 }},
                 {'match_phrase': {
                     'first_line': {
-                        'slop': 10,
+                        'slop': int(params['first_line_slop']),
+                        'boost': params['first_line_boost'],
                         'query': query
                     }
                 }},
                 {'match': {
                     'remaining_lines': {
-                        'query': query
+                        'query': query,
+                        'boost': params['remaining_lines_boost'],
                     }
                 }},
                 {'match': {
                     'first_line': {
-                        'query': query
+                        'query': query,
+                        'boost': params['first_line_boost'],
                     }
                 }},
             ]}
@@ -52,18 +69,18 @@ def with_best_compounds_at_50_plus_10_times_use(es, query, params=None, rerank=T
                 [{'match_phrase': {   # noqa: E127
                     'remaining_lines': {
                         'slop': 10,
-                        'query': new_query
+                        'query': new_query,
+                        'boost': params['remaining_lines_phrase_decomp_boost'],
                     }
                 }},
                 {'match_phrase': {   # noqa: E122
                     'first_line': {
                         'slop': 10,
-                        'query': new_query
+                        'query': new_query,
+                        'boost': params['first_line_phrase_decomp_boost'],
                     }
                 }}]
         body['query']['bool']['should'].extend(alt_clauses)
-
-    print(json.dumps(body, indent=2))
 
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
@@ -72,9 +89,26 @@ def with_best_compounds_at_50_plus_10_times_use(es, query, params=None, rerank=T
         passage_similarity_long_lines(query, hit, verbose=False)
 
     if rerank:
-        hits = sorted(hits, key=lambda x: ((10 * x['_source']['max_sim_use']) + x['_score']), reverse=True)
+        hits = sorted(hits, key=lambda x:
+                      ((params['use_weight'] * x['_source']['max_sim_use'])
+                       + (params['elasticsearch_score_weight'] * x['_score'])), reverse=True)
         hits = hits[:5]
     return hits
+
+
+with_best_compounds_at_50_plus_10_times_use.params = [
+    'rerank_depth',
+    'remaining_lines_slop',
+    'first_line_slop',
+    'remaining_lines_phrase_boost',
+    'remaining_lines_phrase_decomp_boost',
+    'first_line_phrase_boost',
+    'first_line_phrase_decomp_boost',
+    'first_line_boost',
+    'remaining_lines_boost',
+    'use_weight',
+    'elasticsearch_score_weight'
+]
 
 
 # @MemoizeQuery
@@ -132,8 +166,6 @@ def with_best_compounds_at_5_only_phrase_search(es, query, params={}):
                     }
                 }}]
         body['query']['bool']['should'].extend(alt_clauses)
-
-    print(json.dumps(body, indent=2))
 
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
@@ -202,8 +234,6 @@ def with_best_corpus_compounds_at_5_only_phrase_search(es, query, rerank=True):
                 }}]
         body['query']['bool']['should'].extend(alt_clauses)
 
-    print(json.dumps(body, indent=2))
-
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
@@ -270,8 +300,6 @@ def with_best_query_and_corpus_compounds_at_5_only_phrase_search(es, query, rera
                 }}]
         body['query']['bool']['should'].extend(alt_clauses)
 
-    print(json.dumps(body, indent=2))
-
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
@@ -336,8 +364,6 @@ def with_best_compounds_at_5_only_first_line_use(es, query, rerank=True):
                     }
                 }}]
         body['query']['bool']['should'].extend(alt_clauses)
-
-    print(json.dumps(body, indent=2))
 
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
@@ -416,8 +442,6 @@ def with_best_compounds_at_5(es, query, rerank=True):
                 ]
         body['query']['bool']['should'].extend(alt_clauses)
 
-    print(json.dumps(body, indent=2))
-
     hits = es.search(index='vmware', body=body)['hits']['hits']
 
     for hit in hits:
@@ -467,29 +491,7 @@ def with_best_compounds_at_20(es, query, rerank=False):
         }
     }
 
-    new_query = []
-    last_term = ''
-    fast_forward = False
-    for first_term, second_term in zip(query.split(), query.split()[1:]):
-        last_term = second_term
-        if fast_forward:
-            print("Skipping: " + first_term + " " + second_term)
-            fast_forward = False
-            continue
-        first_term = first_term.strip().lower()
-        second_term = second_term.strip().lower()
-        if first_term in to_decompound:
-            new_query.append(to_decompound[first_term])
-        elif (first_term, second_term) in to_compound:
-            new_query.append(first_term + second_term)
-            fast_forward = True
-        else:
-            new_query.append(first_term)
-
-    if last_term in to_decompound:
-        new_query.append(to_decompound[last_term])
-    else:
-        new_query.append(last_term)
+    new_query = to_compound_query(query, to_decompound, to_compound)
 
     if new_query != query.split():
         new_query = " ".join(new_query)
@@ -522,8 +524,6 @@ def with_best_compounds_at_20(es, query, rerank=False):
             }}
         ]
         body['query']['bool']['should'].extend(alt_clauses)
-
-    print(json.dumps(body, indent=2))
 
     hits = es.search(index='vmware', body=body)['hits']['hits']
 

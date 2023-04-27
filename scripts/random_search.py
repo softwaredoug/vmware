@@ -14,6 +14,7 @@ sys.path.insert(0, '.')
 
 from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402, F401
 from vmware.search.rerank_simple_slop_search import rerank_simple_slop_search  # noqa: E402, F401
+from vmware.search.compound_search import with_best_compounds_at_50_plus_10_times_use
 
 
 def ensure_dir():
@@ -117,8 +118,6 @@ def execute_run(strategy, es, queries,
                 query_score /= at
                 curr_score += query_score
                 break
-        if idx % 100 == 0:
-            print(f"Completed {idx} queries")
         if idx >= num_queries - 1:
             curr_score /= (idx + 1)
             break
@@ -172,8 +171,8 @@ hardcoded = {'use_1': 51.206125364348992,
 
 if __name__ == '__main__':
     print("Running random search, stop with Ctrl+C")
-    params_history, best_doc_per_query = random_search(strategy=chatgpt_mlt,
+    params_history, best_doc_per_query = random_search(strategy=with_best_compounds_at_50_plus_10_times_use,
 
-                                                       hard_coded=hardcoded)
+                                                       hard_coded={})
     print("----------")
     print(f"FINAL BEST SCORE {params_history.best_score} with params {params_history.test_params}")

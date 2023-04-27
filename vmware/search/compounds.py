@@ -76,7 +76,6 @@ def to_compound_query(query, to_decompound, to_compound):
             new_query.append(to_decompound[last_term])
         else:
             new_query.append(last_term)
-    print(to_decompound)
     return new_query
 
 
@@ -90,7 +89,6 @@ def get_corpus_and_query_compound_dicts():
 
 
 try:
-    import pdb; pdb.set_trace()
     most_freq_compound_strategy = pickle.load(open("data/cache/most_freq_compound_strategy.pkl", "rb"))
 except FileNotFoundError:
     most_freq_compound_strategy = get_most_freq_compound_dicts()
