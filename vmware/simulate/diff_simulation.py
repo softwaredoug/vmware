@@ -69,6 +69,8 @@ def create_results_diff(results_before, results_after):
             results_after = results_after[results_after['QueryId'] != query_id]
 
         results_before = add_weights(results_before)
+        # join before and after results on query/docid
+        # to see how they shifted
         diff = results_before.merge(results_after,
                                     on=['QueryId', 'DocumentId'],
                                     how='outer')
@@ -95,6 +97,7 @@ def create_results_diff(results_before, results_after):
     assert (diff[diff['position_delta'] == 0]['weight_delta'] == 0).all()
 
     diff.loc[:, 'grade'] = 0
+    # Label items that have moved up as 1?
     diff.loc[diff['weight_delta'] > 0, 'grade'] = 1
     diff.loc[diff['weight_delta'] < 0, 'grade'] = 0
     best_case_dcg_delta = sum(diff['grade'] * diff['weight_delta'])
@@ -300,7 +303,8 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
     diff['universes'] = universes
     diff['entropy'] = -(diff['rels'] * np.log(diff['rels'])
                         + diff['not_rels'] * np.log(diff['not_rels']))
-    diff['std_dev'] = np.sqrt(diff['rels'] * diff['not_rels'] * diff['universes'])
+    # This is the bernouli, NOT beta distribution
+    diff['std_dev'] = np.sqrt(diff['rels'] * diff['not_rels'] * diff['universes']) # why do I multiply by universes?
 
     prob_not_random = diff['prob_not_random'] = (prob_positive - 0.5) * 2
 

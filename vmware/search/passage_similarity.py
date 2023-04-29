@@ -122,6 +122,7 @@ def passage_similarity_long_lines(query, hit,
         assert mean10 <= 1.0
         assert mean5 <= 1.0
         assert mean <= 1.0
+        # assert mean != sum_sims[model_name]
         hit['_source'][f'max_sim_{model_name}'] = max_sims[model_name]
         hit['_source'][f'sum_sim_{model_name}'] = sum_sims[model_name]
         hit['_source'][f'mean_sim_{model_name}'] = sum_sims[model_name]
