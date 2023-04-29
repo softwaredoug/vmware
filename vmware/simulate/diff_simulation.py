@@ -8,7 +8,7 @@ ideal_dcg_at_5 = 2.948459119
 
 
 def add_weights(diff):
-    """Add a position. Compute DCG weights"""
+    """Add a position. Compute DCG weights."""
     # Why does this give pandas warning? It is already using loc[]
     diff.loc[:, 'position'] = diff.groupby('QueryId').cumcount() + 1
     diff.loc[:, 'weight'] = 1 / np.log2(diff['position'] + 1)
@@ -50,8 +50,7 @@ ideal_dcg_at_5 = 2.948459119
 
 
 def create_results_diff(results_before, results_after):
-    """Compute the DCG delta weights resulting from the before and after,
-       so we can compare to observed mean delta dcg."""
+    """Compute the DCG delta weights resulting from the before and after."""
     results_after = results_after.groupby('QueryId').head(5)
     results_after = add_weights(results_after)
 
@@ -263,8 +262,8 @@ def estimate_relevance(diff, actual_dcg_delta, min_rounds=1000, converge_std_dev
 
             # If treating rels / not rels as beta dist
             # Which (I think) approximates the binomial variance of the sample proportion
-            variances = (rels_times_not_rels /
-                         ((rels_plus_not_rels**2) * (1 + rels_plus_not_rels)))
+            variances = (rels_times_not_rels
+                         / ((rels_plus_not_rels**2) * (1 + rels_plus_not_rels)))
 
             # The binomial std deviation squared means we could likel compute the following instead:
             # seemingly according to 'std dev of the sample proportion'
