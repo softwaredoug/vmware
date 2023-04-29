@@ -1,9 +1,11 @@
 from time import time
 import pickle
 import random
+from copy import deepcopy
 from collections import defaultdict
 from elasticsearch import Elasticsearch
 import concurrent.futures
+from time import perf_counter
 import pandas as pd
 import os
 import glob
@@ -14,7 +16,7 @@ sys.path.insert(0, '.')
 
 from vmware.search.chatgpt_mlt import chatgpt_mlt  # noqa: E402, F401
 from vmware.search.rerank_simple_slop_search import rerank_simple_slop_search  # noqa: E402, F401
-from vmware.search.compound_search import with_best_compounds_at_50_plus_10_times_use
+from vmware.search.compound_search import with_best_compounds_at_50_plus_10_times_use  # noqa: E402, F401
 
 
 def ensure_dir():
@@ -33,19 +35,23 @@ class BestDocsPerQuery:
         except FileNotFoundError:
             self.best_doc_per_query = defaultdict(lambda: {'score': 0.0, 'doc_id': '', 'params': {}})
 
-    def add_doc(self, query_id, doc_id, score, params, strategy, query):
+    def add_doc(self, query_id, doc_id, score_model, score, params, strategy, query):
         if query_id not in self.best_doc_per_query:
             self.best_doc_per_query[query_id] = {'score': 0.0, 'doc_id': '', 'params': {},
-                                                 'strategy': '', 'query': ''}
-        if score > self.best_doc_per_query[query_id]['score']:
-            self.best_doc_per_query[query_id]['score'] = score
-            self.best_doc_per_query[query_id]['doc_id'] = doc_id
-            self.best_doc_per_query[query_id]['params'] = params
-            self.best_doc_per_query[query_id]['strategy'] = strategy
-            self.best_doc_per_query[query_id]['query'] = query
+                                                 'strategy': '', 'query': '', 'score_model': ''}
+            if score > self.best_doc_per_query[query_id]['score']:
+                self.best_doc_per_query[query_id]['score'] = score
+                self.best_doc_per_query[query_id]['score_model'] = score_model
+                self.best_doc_per_query[query_id]['doc_id'] = doc_id
+                self.best_doc_per_query[query_id]['params'] = params
+                self.best_doc_per_query[query_id]['strategy'] = strategy
+                self.best_doc_per_query[query_id]['query'] = query
 
     def save(self):
         pickle.dump(dict(self.best_doc_per_query), open('data/random_search/best_doc_per_query.pkl', 'wb'))
+
+    def as_df(self):
+        return pd.DataFrame(self.best_doc_per_query.values())
 
 
 class ParamsHistory:
@@ -67,6 +73,9 @@ class ParamsHistory:
             self.best_score = score
             self.best_params = params
 
+    def __len__(self):
+        return len(self.history)
+
 
 def build_valid_params(es, test_query, strategy, hard_coded):
     """Build a set of valid params for a given strategy."""
@@ -78,10 +87,12 @@ def build_valid_params(es, test_query, strategy, hard_coded):
     tries = 0
     while not params_good:
         try:
+            print("Try params")
             strategy(es, query=test_query, params=params_dict)
             params_good = True
             break
-        except ValueError:
+        except ValueError as e:
+            print(e)
             params_dict = {param: random.uniform(0.1, 100.0) for param in params}
             for key, value in hard_coded.items():
                 params_dict[key] = value
@@ -93,17 +104,24 @@ def build_valid_params(es, test_query, strategy, hard_coded):
 
 def execute_run(strategy, es, queries,
                 best_doc_per_query,
-                num_queries=500,
+                num_queries=2000,
                 hard_coded={},
-                at=5):
+                at=5,
+                shuffle=True):
+    print("Building valid params")
+    if shuffle:
+        queries = deepcopy(queries)
+        random.shuffle(queries)
     params_dict = build_valid_params(es,
                                      test_query=queries[0]['Query'],
                                      strategy=strategy,
                                      hard_coded=hard_coded)
     curr_score = 0.0
-    for idx, query in enumerate(queries):
-        results = strategy(es, query=query['Query'], params=params_dict)
 
+    for idx, query in enumerate(queries):
+        start_time = perf_counter()
+        results = strategy(es, query=query['Query'], params=params_dict)
+        print(f"{query['QueryId']} - {query['Query']} - {perf_counter() - start_time:.2f}")
         query_score = 0.0
         for rank, result in enumerate(results):
             doc_score = result['_source']['max_sim_mpnet']
@@ -112,6 +130,7 @@ def execute_run(strategy, es, queries,
                                        query=query['Query'],
                                        doc_id=result['_source']['id'],
                                        score=doc_score,
+                                       score_model='max_sim_mpnet',
                                        params=params_dict,
                                        strategy=strategy.__name__)
             if rank >= at - 1:
@@ -125,7 +144,7 @@ def execute_run(strategy, es, queries,
 
 
 def random_search(strategy=chatgpt_mlt,
-                  num_queries=100, at=5,
+                  num_queries=2000, at=5,
                   hard_coded={}):
     best_doc_per_query = BestDocsPerQuery()
     queries = pd.read_csv('data/test.csv').to_dict(orient='records')
@@ -134,7 +153,7 @@ def random_search(strategy=chatgpt_mlt,
 
     params_history = ParamsHistory()
 
-    concurrent_runs = 4
+    concurrent_runs = 24
     while True:
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrent_runs) as executor:
             futures = []
@@ -159,20 +178,13 @@ def read_all_csv(path='data/random_search'):
     return pd.concat(df_from_each_file, ignore_index=True)
 
 
-hardcoded = {'use_1': 51.206125364348992,
-             'use_2': 51.685299030133455,
-             'use_3': 51.07842982196352,
-             'use_4': 51.53141784404721,
-             'use_5': 51.70771331344108,
-             'use_6': 51.70771331344108,
-             'use_query': 51.9313524558668638,
-             'rerank_depth': 100}
+hardcoded = {'rerank_depth': 100}
 
 
 if __name__ == '__main__':
     print("Running random search, stop with Ctrl+C")
     params_history, best_doc_per_query = random_search(strategy=with_best_compounds_at_50_plus_10_times_use,
 
-                                                       hard_coded={})
+                                                       hard_coded=hardcoded)
     print("----------")
     print(f"FINAL BEST SCORE {params_history.best_score} with params {params_history.test_params}")

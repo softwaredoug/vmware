@@ -1,7 +1,7 @@
 from .passage_similarity import passage_similarity_long_lines
 from .splainer import splainer_url
 from .query_cache import MemoizeQuery
-
+# from time import perf_counter
 from vmware.search.compounds import most_freq_compound_strategy, to_compound_query, \
     most_freq_compound_corpus_strategy, most_freq_compound_both_strategy
 
@@ -28,7 +28,8 @@ def with_best_compounds_at_50_plus_10_times_use(es, query, params=None, rerank=T
 
     to_decompound, to_compound = most_freq_compound_strategy[0], most_freq_compound_strategy[1]
     body = {
-        'size': 50,
+        'size': int(params['rerank_depth']),
+        "_source": ["title", "first_line", "raw_text", "remaining_lines", "id"],
         'query': {
             'bool': {'should': [
                 {'match_phrase': {
@@ -120,6 +121,7 @@ def with_best_compounds_at_5_only_phrase_search(es, query, params={}):
     to_decompound, to_compound = most_freq_compound_strategy[0], most_freq_compound_strategy[1]
     body = {
         'size': 5,
+        "_source": ["title", "first_line", "raw_text", "remaining_lines", "id"],
         'query': {
             'bool': {'should': [
                 {'match_phrase': {
@@ -187,6 +189,7 @@ def with_best_corpus_compounds_at_5_only_phrase_search(es, query, rerank=True):
     to_decompound, to_compound = most_freq_compound_corpus_strategy[0], most_freq_compound_corpus_strategy[1]
     body = {
         'size': 5,
+        "_source": ["title", "first_line", "raw_text", "remaining_lines", "id"],
         'query': {
             'bool': {'should': [
                 {'match_phrase': {
@@ -253,6 +256,7 @@ def with_best_query_and_corpus_compounds_at_5_only_phrase_search(es, query, rera
     to_decompound, to_compound = most_freq_compound_both_strategy[0], most_freq_compound_both_strategy[1]
     body = {
         'size': 5,
+        "_source": ["title", "first_line", "raw_text", "remaining_lines", "id"],
         'query': {
             'bool': {'should': [
                 {'match_phrase': {
@@ -318,6 +322,7 @@ def with_best_compounds_at_5_only_first_line_use(es, query, rerank=True):
     to_decompound, to_compound = most_freq_compound_strategy[0], most_freq_compound_strategy[1]
     body = {
         'size': 5,
+        "_source": ["title", "first_line", "raw_text", "remaining_lines", "id"],
         'query': {
             'bool': {'should': [
                 {'match_phrase': {
@@ -384,6 +389,7 @@ def with_best_compounds_at_5(es, query, rerank=True):
     to_decompound, to_compound = most_freq_compound_strategy[0], most_freq_compound_strategy[1]
     body = {
         'size': 5,
+        "_source": ["title", "first_line", "raw_text", "remaining_lines", "id"],
         'query': {
             'bool': {'should': [
                 {'match_phrase': {
@@ -463,6 +469,7 @@ def with_best_compounds_at_20(es, query, rerank=False):
     to_decompound, to_compound = most_freq_compound_strategy[0], most_freq_compound_strategy[1]
     body = {
         'size': 20,
+        "_source": ["title", "first_line", "raw_text", "remaining_lines", "id"],
         'query': {
             'bool': {'should': [
                 {'match_phrase': {

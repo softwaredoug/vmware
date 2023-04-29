@@ -13,7 +13,6 @@ from vmware.index.index import rebuild, enrich
 
 # enrichment migrations
 # from vmware.index.modal import vmware_stub
-from vmware.index import use
 from vmware.index import first_line
 from vmware.index import remaining_lines
 from vmware.index import use_remaining_lines
@@ -71,30 +70,17 @@ def main(version):
                 configs_dir='vmware')
     elif version == 1:
         enrich(es, index='vmware',
-               enrich_fn=use.enrichment,
-               mapping=use.mapping,
-               version=version)
-    elif version == 2:
-        enrich(es, index='vmware',
                enrich_fn=first_line.enrichment,
                mapping=first_line.mapping,
                version=version)
-    elif version == 3:
+    elif version == 2:
         enrich(es, index='vmware',
                enrich_fn=remaining_lines.enrichment,
                mapping=remaining_lines.mapping, version=version)
-    elif version == 4:
-        enrich(es, index='vmware',
-               enrich_fn=use_remaining_lines.enrichment,
-               mapping=use_remaining_lines.mapping, version=version)
-    elif version == 5:
+    elif version == 3:
         enrich(es, index='vmware',
                enrich_fn=first_remaining_lines.enrichment,
                mapping=first_remaining_lines.mapping, version=version)
-    elif version == 6:
-        enrich(es, index='vmware',
-               enrich_fn=three_lines_together.enrichment,
-               mapping=three_lines_together.mapping, version=version)
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ class ModelEncoder:
                                  dtype=np.float32,
                                  dims=dims)
 
-    def encode(self, text, cached=True):
+    def encode(self, text, cached=False):
         """Embed a single snippet, prefer cached version if available."""
         if cached:
             cached_value = self.cache.get(text)
@@ -32,5 +32,6 @@ class ModelEncoder:
                 return cached_value
 
         encoded = self.model.encode(text)
-        self.cache.set(text, encoded)
+        if cached:
+            self.cache.set(text, encoded)
         return encoded
