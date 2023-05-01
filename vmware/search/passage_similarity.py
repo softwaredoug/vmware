@@ -53,6 +53,23 @@ def sims_to_cache(cache_key, hit):
         r.hset(cache_key, field, float(hit['_source'][field]))
 
 
+def get_lines(hit):
+    lines = [hit['_source']['first_line']]
+    for line in hit['_source']['remaining_lines']:
+        if len(line) > 20:
+            lines.append(line)
+    return lines
+
+
+def patch_mean(cache_key, hit):
+    lines = get_lines(hit)
+    for model_name in encoders:
+        if hit['_source'][f'mean_sim_{model_name}'] == hit['_source'][f'sum_sim_{model_name}']:
+            hit['_source'][f'mean_sim_{model_name}'] = hit['_source'][f'sum_sim_{model_name}'] / len(lines)
+        assert hit['_source'][f'mean_sim_{model_name}'] <= 1.05
+    sims_to_cache(cache_key, hit)
+
+
 def passage_similarity_long_lines(query, hit,
                                   verbose=False,
                                   remaining_lines=True,
@@ -66,13 +83,10 @@ def passage_similarity_long_lines(query, hit,
             assert field in hit['_source']
         if verbose:
             print(f"Cached at {cache_key}")
+        patch_mean(cache_key, hit)
         return
 
-    source = hit['_source']
-    lines = [source['first_line']]
-    for line in source['remaining_lines']:
-        if len(line) > 20:
-            lines.append(line)
+    lines = get_lines(hit)
 
     query_encodings = {model_name: model(query) for model_name, model in encoders.items()}
 
@@ -125,7 +139,7 @@ def passage_similarity_long_lines(query, hit,
         # assert mean != sum_sims[model_name]
         hit['_source'][f'max_sim_{model_name}'] = max_sims[model_name]
         hit['_source'][f'sum_sim_{model_name}'] = sum_sims[model_name]
-        hit['_source'][f'mean_sim_{model_name}'] = sum_sims[model_name]
+        hit['_source'][f'mean_sim_{model_name}'] = mean
 
         hit['_source'][f'max_sim_10_{model_name}'] = max_sims10[model_name]
         hit['_source'][f'sum_sim_10_{model_name}'] = sum_sims10[model_name]
