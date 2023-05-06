@@ -10,10 +10,11 @@ encoders = {
     'use': encode_use,
     'mpnet': encode_mpnet
 }
+namespace = 'sim'
 
 
 # doc_sims_cache = {}
-r = redis.Redis(host='localhost', port=6379)
+r = redis.Redis(host='localhost', port=6399)
 
 
 def cached_fields():
@@ -77,7 +78,7 @@ def passage_similarity_long_lines(query, hit,
                                   vector_cache=False):
     start_time = perf_counter()
     encode_time = 0.0
-    cache_key = f"{query}|||{hit['_id']}"
+    cache_key = f"{namespace}:{query}|||{hit['_id']}"
     if sim_cache and sims_from_cache(cache_key, hit):
         for field in cached_fields():
             assert field in hit['_source']

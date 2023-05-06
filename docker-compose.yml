@@ -29,11 +29,12 @@ services:
     platform: linux/amd64
     image: 'bitnami/redis:latest'
     ports:
-     - "6379:6379"
+     - "6399:6379"
     expose:
-      - "6379"
+      - "6399"
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_APPENDONLY=yes
     volumes:
       - tlre-redis-data:/bitnami/redis/data
 
