@@ -59,9 +59,16 @@ def score_similarity(simulated_results: pd.DataFrame, num_to_score: int = None) 
                 for task in as_completed(tasks):
                     new_df.append(task.result())
                 tasks = []
-                if num_to_score is not None and idx >= num_to_score:
-                    break
-    return pd.DataFrame(new_df)
+            if num_to_score is not None and idx >= num_to_score:
+                break
+    for task in as_completed(tasks):
+        new_df.append(task.result())
+
+    new_df = pd.DataFrame(new_df)
+
+    for field in cached_fields():
+        new_df = new_df[~new_df[field].isna()]
+    return new_df
 
 
 def assign_features(scored_results: pd.DataFrame) -> pd.DataFrame:
